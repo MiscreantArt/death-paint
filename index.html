@@ -159,30 +159,13 @@
         let stars = [];
         let activeChromieWave = null;
         
-        // ===== SOUND SYSTEM (Web Audio API — core sounds only) =====
+        // ===== SOUND SYSTEM (Synthesized — musical & pleasing) =====
         let audioCtx = null;
         let bgMusic = null;
-        const soundBuffers = {};
-        const soundVolumes = {
-            'laser-shoot': 0.12,
-            'player-hit': 0.45,
-            'player-death': 0.6,
-            'enemy-hit': 0.25,
-            'enemy-death': 0.15,
-            'game-over': 0.6,
-            'kill-sound': 0.2
-        };
 
         function initAudio() {
             if (audioCtx) return;
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            Object.keys(soundVolumes).forEach(name => {
-                fetch(`sounds/${name}.wav`)
-                    .then(r => r.arrayBuffer())
-                    .then(buf => audioCtx.decodeAudioData(buf))
-                    .then(decoded => { soundBuffers[name] = decoded; })
-                    .catch(() => {});
-            });
         }
 
         function startMusic() {
@@ -197,23 +180,218 @@
             if (bgMusic) { bgMusic.pause(); bgMusic.currentTime = 0; bgMusic = null; }
         }
 
+        // === Haptics ===
+        function haptic(pattern) {
+            if (navigator.vibrate) navigator.vibrate(pattern);
+        }
+
+        // === Synth helpers ===
+        function synthTone(freq, dur, vol, type, ramp) {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = type || 'sine';
+            o.frequency.setValueAtTime(freq, t);
+            if (ramp) o.frequency.exponentialRampToValueAtTime(ramp, t + dur);
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(t); o.stop(t + dur);
+        }
+
+        function synthNoise(dur, vol, filterFreq) {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const bufSize = audioCtx.sampleRate * dur;
+            const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+            const src = audioCtx.createBufferSource();
+            src.buffer = buf;
+            const filt = audioCtx.createBiquadFilter();
+            filt.type = 'lowpass';
+            filt.frequency.setValueAtTime(filterFreq || 3000, t);
+            filt.frequency.exponentialRampToValueAtTime(200, t + dur);
+            const g = audioCtx.createGain();
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            src.connect(filt); filt.connect(g); g.connect(audioCtx.destination);
+            src.start(t); src.stop(t + dur);
+        }
+
+        function synthChord(freqs, dur, vol, type) {
+            freqs.forEach(f => synthTone(f, dur, vol / freqs.length, type || 'sine'));
+        }
+
+        // === Sound throttling ===
         const soundThrottles = {};
-        const throttleMs = { 'laser-shoot': 180, 'enemy-hit': 80, 'kill-sound': 80 };
+        const throttleMs = { 'laser-shoot': 120, 'enemy-hit': 60, 'kill-sound': 60, 'enemy-death': 40 };
+
+        // === Sound definitions (all synthesized) ===
+        const soundDefs = {
+            'laser-shoot': () => {
+                // Quick bright zap — musical ping, not squeaky
+                synthTone(880, 0.08, 0.08, 'triangle', 1760);
+                synthTone(1320, 0.05, 0.04, 'sine', 2640);
+                haptic(8);
+            },
+            'enemy-hit': () => {
+                // Soft thud — satisfying impact
+                synthTone(200, 0.1, 0.15, 'sine', 80);
+                synthNoise(0.06, 0.08, 1500);
+                haptic(12);
+            },
+            'enemy-death': () => {
+                // Musical pop — ascending burst
+                synthTone(330, 0.08, 0.12, 'sine', 660);
+                synthTone(523, 0.1, 0.08, 'triangle', 1047);
+                synthNoise(0.08, 0.06, 2000);
+                haptic(20);
+            },
+            'kill-sound': () => {
+                // Bright chime on kill
+                synthTone(784, 0.12, 0.07, 'sine');
+                synthTone(1047, 0.1, 0.05, 'sine');
+            },
+            'player-hit': () => {
+                // Low warning thump
+                synthTone(120, 0.15, 0.25, 'sine', 60);
+                synthNoise(0.1, 0.12, 800);
+                haptic([30, 20, 30]);
+            },
+            'player-death': () => {
+                // Descending sad tone
+                synthTone(440, 0.3, 0.2, 'sine', 110);
+                synthTone(330, 0.4, 0.15, 'triangle', 82);
+                synthNoise(0.2, 0.1, 600);
+                haptic([50, 30, 80]);
+            },
+            'game-over': () => {
+                // Minor chord fade
+                setTimeout(() => synthChord([262, 311, 392], 0.8, 0.3, 'sine'), 0);
+                setTimeout(() => synthChord([247, 294, 370], 1.0, 0.2, 'sine'), 400);
+                haptic([40, 60, 40, 60, 80]);
+            },
+            'powerup-collect': () => {
+                // Bright ascending arpeggio
+                synthTone(523, 0.08, 0.1, 'sine');
+                setTimeout(() => synthTone(659, 0.08, 0.1, 'sine'), 50);
+                setTimeout(() => synthTone(784, 0.08, 0.1, 'sine'), 100);
+                setTimeout(() => synthTone(1047, 0.15, 0.12, 'sine'), 150);
+                haptic([15, 10, 15, 10, 20]);
+            },
+            'chromie-shockwave': () => {
+                // Big swoosh with rising shimmer
+                synthNoise(0.4, 0.15, 4000);
+                synthTone(220, 0.5, 0.1, 'sine', 880);
+                synthTone(330, 0.5, 0.08, 'triangle', 1320);
+                haptic([20, 10, 20, 10, 40]);
+            },
+            'crown-collect': () => {
+                // Royal fanfare — major chord
+                synthChord([523, 659, 784], 0.2, 0.15, 'sine');
+                setTimeout(() => synthChord([784, 988, 1175], 0.3, 0.12, 'sine'), 150);
+                haptic(25);
+            },
+            'duck-quack': () => {
+                // Cartoon quack
+                synthTone(300, 0.08, 0.15, 'square', 200);
+                setTimeout(() => synthTone(280, 0.1, 0.12, 'square', 180), 100);
+                haptic(15);
+            },
+            'flame-activate': () => {
+                // Whoosh ignition
+                synthNoise(0.3, 0.12, 5000);
+                synthTone(200, 0.2, 0.1, 'sawtooth', 600);
+                haptic([10, 5, 10, 5, 30]);
+            },
+            'halo-activate': () => {
+                // Ethereal shimmer
+                synthChord([880, 1109, 1319], 0.4, 0.1, 'sine');
+                synthTone(1760, 0.3, 0.05, 'sine', 880);
+                haptic(20);
+            },
+            'skully-activate': () => {
+                // Dark power-up — low ominous
+                synthTone(110, 0.3, 0.15, 'sawtooth', 55);
+                synthTone(165, 0.2, 0.1, 'square', 82);
+                haptic([30, 15, 30]);
+            },
+            'raincloud-activate': () => {
+                // Gentle rain shimmer
+                synthNoise(0.3, 0.08, 2000);
+                synthTone(660, 0.2, 0.06, 'sine', 330);
+                haptic(15);
+            },
+            'menu-tap': () => {
+                // Clean click
+                synthTone(800, 0.04, 0.1, 'sine');
+                haptic(5);
+            },
+            'game-start': () => {
+                // Energetic start — ascending major
+                synthTone(523, 0.1, 0.1, 'sine');
+                setTimeout(() => synthTone(659, 0.1, 0.1, 'sine'), 80);
+                setTimeout(() => synthTone(784, 0.1, 0.1, 'sine'), 160);
+                setTimeout(() => synthChord([1047, 1319, 1568], 0.3, 0.15, 'sine'), 240);
+                haptic([10, 10, 10, 10, 25]);
+            },
+            'godlike-stinger': () => {
+                // Epic stinger
+                synthChord([523, 659, 784, 1047], 0.5, 0.2, 'sine');
+                setTimeout(() => synthChord([784, 988, 1175, 1568], 0.6, 0.15, 'sine'), 200);
+                haptic([20, 10, 40]);
+            },
+            'legendary-stinger': () => {
+                synthChord([440, 554, 659], 0.4, 0.15, 'sine');
+                setTimeout(() => synthChord([659, 831, 988], 0.5, 0.12, 'sine'), 200);
+                haptic([15, 10, 30]);
+            },
+            'rampage-stinger': () => {
+                synthTone(440, 0.15, 0.12, 'square', 880);
+                setTimeout(() => synthTone(660, 0.15, 0.12, 'square', 1320), 100);
+                haptic([10, 10, 20]);
+            },
+            'unstoppable-stinger': () => {
+                synthChord([330, 440, 554], 0.3, 0.12, 'sine');
+                setTimeout(() => synthChord([554, 659, 880], 0.4, 0.1, 'sine'), 150);
+                haptic([15, 10, 25]);
+            },
+            'powerup-spawn': () => {
+                // Gentle sparkle
+                synthTone(1047, 0.1, 0.05, 'sine', 523);
+                haptic(5);
+            },
+            'powerup-expire': () => {
+                // Soft descend
+                synthTone(660, 0.15, 0.06, 'sine', 330);
+            },
+            'enemy-whoosh': () => {
+                synthNoise(0.12, 0.06, 2500);
+            },
+            'splat-current': () => {
+                // Paint splat — wet pop
+                synthNoise(0.1, 0.1, 1800);
+                synthTone(150, 0.08, 0.08, 'sine', 60);
+                haptic(10);
+            },
+            'combo-ping': () => {
+                synthTone(1175, 0.08, 0.06, 'sine');
+                synthTone(1568, 0.06, 0.04, 'sine');
+            }
+        };
 
         function playSound(name) {
-            if (!audioCtx || !soundBuffers[name] || !soundVolumes[name]) return;
+            if (!audioCtx) return;
+            const def = soundDefs[name];
+            if (!def) return;
             const now = performance.now();
             if (throttleMs[name]) {
                 if (soundThrottles[name] && now - soundThrottles[name] < throttleMs[name]) return;
                 soundThrottles[name] = now;
             }
-            const source = audioCtx.createBufferSource();
-            const gain = audioCtx.createGain();
-            source.buffer = soundBuffers[name];
-            gain.gain.value = soundVolumes[name];
-            source.connect(gain);
-            gain.connect(audioCtx.destination);
-            source.start(0);
+            try { def(); } catch(e) {}
         }
         
         // Sprites - new structure for sprite sheets
