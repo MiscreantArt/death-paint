@@ -2212,13 +2212,13 @@
                 paintRainDrops = paintRainDrops.filter(d => {
                     d.x += d.vx;
                     d.y += d.vy;
-                    // Hit the bottom of play area — stick to paint canvas
-                    if (d.y >= canvas.height - TOOLBAR_H - 2) {
+                    // Hit the bottom — stick to paint canvas
+                    if (d.y >= canvas.height - 2) {
                         if (paintCtx) {
                             paintCtx.fillStyle = d.color;
                             const r = d.size * (0.6 + Math.random() * 0.4);
                             paintCtx.beginPath();
-                            paintCtx.arc(d.x, canvas.height - TOOLBAR_H - 2, r, 0, Math.PI * 2);
+                            paintCtx.arc(d.x, canvas.height - 2, r, 0, Math.PI * 2);
                             paintCtx.fill();
                         }
                         return false;
@@ -2364,7 +2364,7 @@
                 // Pause overlay
                 if (gamePaused) {
                     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height - TOOLBAR_H);
+                    ctx.fillRect(0, TOOLBAR_H, canvas.width, canvas.height - TOOLBAR_H);
                     ctx.font = 'italic 22px Georgia, serif';
                     ctx.fillStyle = '#888';
                     ctx.textAlign = 'center';
@@ -2745,65 +2745,60 @@
             saveButtonRect = { x: canvas.width - 140, y: 10, w: 130, h: 30 };
         }
 
-        // Draw UI — clean bottom bar, separate from game area
+        // Draw UI — classy top bar
         let hangBtnGameRect = null;
         let pauseBtnRect = null;
         let endBtnRect = null;
-        const TOOLBAR_H = 52;
+        const TOOLBAR_H = 44;
         
         function drawUI() {
-            // Solid bar at bottom — NOT transparent, its own space
-            const barY = canvas.height - TOOLBAR_H;
-            
+            // White bar at top — clean, gallery-like
             ctx.save();
             
-            // Solid dark bar
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(0, barY, canvas.width, TOOLBAR_H);
+            // Solid white bar
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, TOOLBAR_H);
             
-            // Subtle top edge
-            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            // Subtle bottom edge
+            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(0, barY + 0.5);
-            ctx.lineTo(canvas.width, barY + 0.5);
+            ctx.moveTo(0, TOOLBAR_H - 0.5);
+            ctx.lineTo(canvas.width, TOOLBAR_H - 0.5);
             ctx.stroke();
             
-            const btnH = 34, btnY2 = barY + (TOOLBAR_H - btnH) / 2;
+            const btnH = 30, btnY2 = (TOOLBAR_H - btnH) / 2;
             const cx = canvas.width / 2;
-            const gap = 16;
+            const gap = 20;
             
-            // Two buttons centered: pause + hang
-            const pauseW = canvas.width * 0.35;
-            const hangW = canvas.width * 0.35;
+            // Two buttons centered: pause (left) + hang (right)
+            const pauseW = canvas.width * 0.3;
+            const hangW = canvas.width * 0.3;
             const totalW = pauseW + hangW + gap;
             const startX = (canvas.width - totalW) / 2;
             
-            // Pause button (left)
+            // Pause button
             const pauseX = startX;
             pauseBtnRect = { x: pauseX, y: btnY2, w: pauseW, h: btnH };
-            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.fillStyle = 'rgba(0,0,0,0.04)';
             ctx.beginPath();
-            ctx.roundRect(pauseX, btnY2, pauseW, btnH, 8);
+            ctx.roundRect(pauseX, btnY2, pauseW, btnH, 6);
             ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            ctx.font = '600 13px -apple-system, "SF Pro Text", Arial, sans-serif';
+            ctx.font = 'italic 13px Georgia, serif';
             ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(255,255,255,0.7)';
-            ctx.fillText('⏸  pause', pauseX + pauseW/2, btnY2 + 22);
+            ctx.fillStyle = '#999';
+            ctx.fillText('pause', pauseX + pauseW/2, btnY2 + 20);
             
-            // Hang button (right) — accent
+            // Hang button — slightly warmer
             const hangX = startX + pauseW + gap;
             hangBtnGameRect = { x: hangX, y: btnY2, w: hangW, h: btnH };
-            ctx.fillStyle = '#4a3520';
+            ctx.fillStyle = 'rgba(74,53,32,0.08)';
             ctx.beginPath();
-            ctx.roundRect(hangX, btnY2, hangW, btnH, 8);
+            ctx.roundRect(hangX, btnY2, hangW, btnH, 6);
             ctx.fill();
-            ctx.font = '600 13px -apple-system, "SF Pro Text", Arial, sans-serif';
-            ctx.fillStyle = '#e8d5b5';
-            ctx.fillText('🖼  hang', hangX + hangW/2, btnY2 + 22);
+            ctx.font = 'italic 13px Georgia, serif';
+            ctx.fillStyle = '#4a3520';
+            ctx.fillText('hang', hangX + hangW/2, btnY2 + 20);
             
             // No end button — hang IS the end
             endBtnRect = null;
@@ -2817,7 +2812,7 @@
                 const dots = '●'.repeat(Math.min(streakCount, 10));
                 const remaining = 10 - Math.min(streakCount, 10);
                 const empties = '○'.repeat(remaining);
-                ctx.fillText(dots + empties, 8, barY + TOOLBAR_H/2 + 3);
+                ctx.fillText(dots + empties, 8, TOOLBAR_H/2 + 3);
             }
             
             ctx.restore();
@@ -2926,8 +2921,8 @@
                     playSound('menu-tap');
                     return;
                 }
-                // If touch is in toolbar area, don't pass to game controls
-                if (ty >= canvas.height - TOOLBAR_H) return;
+                // If touch is in toolbar area (top), don't pass to game controls
+                if (ty <= TOOLBAR_H) return;
             }
             
             // Show zone labels when first touching
