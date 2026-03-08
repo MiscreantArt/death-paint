@@ -2743,64 +2743,68 @@
             saveButtonRect = { x: canvas.width - 140, y: 10, w: 130, h: 30 };
         }
 
-        // Draw UI — minimal, just the hang button
+        // Draw UI — clean bottom bar, separate from game area
         let hangBtnGameRect = null;
         let pauseBtnRect = null;
         let endBtnRect = null;
-        const TOOLBAR_H = 44;
+        const TOOLBAR_H = 52;
         
         function drawUI() {
-            // Bottom toolbar — semi-transparent bar with buttons
+            // Solid bar at bottom — NOT transparent, its own space
             const barY = canvas.height - TOOLBAR_H;
             
             ctx.save();
-            // Frosted bar background
-            ctx.fillStyle = 'rgba(255,255,255,0.75)';
+            
+            // Solid dark bar
+            ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, barY, canvas.width, TOOLBAR_H);
-            ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+            
+            // Subtle top edge
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(0, barY);
-            ctx.lineTo(canvas.width, barY);
+            ctx.moveTo(0, barY + 0.5);
+            ctx.lineTo(canvas.width, barY + 0.5);
             ctx.stroke();
             
-            const btnH = 28, btnY = barY + (TOOLBAR_H - btnH) / 2;
+            const btnH = 34, btnY2 = barY + (TOOLBAR_H - btnH) / 2;
             const cx = canvas.width / 2;
-            ctx.font = '11px Arial';
-            ctx.textAlign = 'center';
+            const gap = 16;
+            
+            // Two buttons centered: pause + hang
+            const pauseW = canvas.width * 0.35;
+            const hangW = canvas.width * 0.35;
+            const totalW = pauseW + hangW + gap;
+            const startX = (canvas.width - totalW) / 2;
             
             // Pause button (left)
-            const pauseW = 55;
-            const pauseX = cx - 95;
-            pauseBtnRect = { x: pauseX, y: btnY, w: pauseW, h: btnH };
-            ctx.fillStyle = 'rgba(0,0,0,0.06)';
+            const pauseX = startX;
+            pauseBtnRect = { x: pauseX, y: btnY2, w: pauseW, h: btnH };
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
             ctx.beginPath();
-            ctx.roundRect(pauseX, btnY, pauseW, btnH, 6);
+            ctx.roundRect(pauseX, btnY2, pauseW, btnH, 8);
             ctx.fill();
-            ctx.fillStyle = '#666';
-            ctx.fillText('⏸ pause', pauseX + pauseW/2, btnY + 18);
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.font = '600 13px -apple-system, "SF Pro Text", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillText('⏸  pause', pauseX + pauseW/2, btnY2 + 22);
             
-            // Hang button (center)
-            const hangW = 60;
-            const hangX = cx - hangW/2;
-            hangBtnGameRect = { x: hangX, y: btnY, w: hangW, h: btnH };
-            ctx.fillStyle = 'rgba(74,53,32,0.12)';
-            ctx.beginPath();
-            ctx.roundRect(hangX, btnY, hangW, btnH, 6);
-            ctx.fill();
+            // Hang button (right) — accent
+            const hangX = startX + pauseW + gap;
+            hangBtnGameRect = { x: hangX, y: btnY2, w: hangW, h: btnH };
             ctx.fillStyle = '#4a3520';
-            ctx.fillText('🖼 hang', hangX + hangW/2, btnY + 18);
-            
-            // End game button (right)
-            const endW = 50;
-            const endX = cx + 45;
-            endBtnRect = { x: endX, y: btnY, w: endW, h: btnH };
-            ctx.fillStyle = 'rgba(0,0,0,0.06)';
             ctx.beginPath();
-            ctx.roundRect(endX, btnY, endW, btnH, 6);
+            ctx.roundRect(hangX, btnY2, hangW, btnH, 8);
             ctx.fill();
-            ctx.fillStyle = '#999';
-            ctx.fillText('✕ end', endX + endW/2, btnY + 18);
+            ctx.font = '600 13px -apple-system, "SF Pro Text", Arial, sans-serif';
+            ctx.fillStyle = '#e8d5b5';
+            ctx.fillText('🖼  hang', hangX + hangW/2, btnY2 + 22);
+            
+            // No end button — hang IS the end
+            endBtnRect = null;
             
             // Kill streak indicator (if active)
             if (streakCount > 0) {
