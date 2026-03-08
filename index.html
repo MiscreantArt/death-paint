@@ -78,6 +78,40 @@
         let dyingDriftPixels = []; // pixels that drift outward after death
         let score = 0;
         let killCount = 0;
+        let streakCount = 0; // Kills without getting hit — resets on damage
+        let paintRainActive = false;
+        let paintRainDrops = [];
+        let paintRainTimer = 0;
+        let gamePaused = false;
+        
+        // Kill streak → paint rain system
+        function onEnemyKill() {
+            streakCount++;
+            // At 10 streak, trigger paint rain
+            if (streakCount >= 10 && !paintRainActive) {
+                triggerPaintRain();
+                streakCount = 0;
+            }
+        }
+        
+        function triggerPaintRain() {
+            paintRainActive = true;
+            paintRainTimer = 180; // 3 seconds at 60fps
+            paintRainDrops = [];
+            // Musical celebration — ascending major arpeggio
+            const celebNotes = [523, 659, 784, 1047, 1319, 1568];
+            celebNotes.forEach((note, i) => {
+                setTimeout(() => {
+                    synthTone(note, 0.3, 0.08, 'sine');
+                    synthTone(note * 0.5, 0.2, 0.04, 'sine');
+                }, i * 80);
+            });
+            // Final chord
+            setTimeout(() => {
+                synthChord([523, 659, 784, 1047], 0.8, 0.12, 'sine');
+            }, celebNotes.length * 80);
+            haptic([15, 10, 15, 10, 15, 10, 30]);
+        }
         let lives = 3;
         let screenShake = 0;
         let testMode = true; // Test mode always on
@@ -1768,6 +1802,7 @@
                 captureArt();
             }
             if (gameState !== 'playing' && gameState !== 'dying') return;
+            if (gamePaused && gameState === 'playing') return;
             if (gameState === 'dying') {
                 // Only update drift pixels during death sequence
                 dyingDriftPixels = dyingDriftPixels.filter(p => {
@@ -1915,6 +1950,7 @@
                             const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                             score += points;
                             killCount++;
+                            onEnemyKill();
                             
                             // Colorful pixel death explosion
                             if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -1951,6 +1987,7 @@
                         const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                         score += points;
                         killCount++;
+                        onEnemyKill();
                         
                         // Colorful pixel death explosion
                         if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -1962,6 +1999,7 @@
                         // Normal collision - player takes damage
                         playSound('player-hit');
                         player.takeDamage();
+                        streakCount = 0; // Reset kill streak on damage
                         // Push enemy away
                         const length = Math.sqrt(distSq);
                         if (length > 0) {
@@ -2153,6 +2191,43 @@
             if (screenShake > 0) {
                 screenShake--;
             }
+            
+            // Update paint rain
+            if (paintRainActive) {
+                paintRainTimer--;
+                // Spawn new drops
+                for (let i = 0; i < 8; i++) {
+                    paintRainDrops.push({
+                        x: Math.random() * canvas.width,
+                        y: -10 - Math.random() * 20,
+                        vy: 3 + Math.random() * 5,
+                        vx: (Math.random() - 0.5) * 2,
+                        size: 2 + Math.random() * 4,
+                        color: pixelColors[Math.floor(Math.random() * pixelColors.length)],
+                        life: 120 + Math.random() * 60
+                    });
+                }
+                // Update existing drops
+                paintRainDrops = paintRainDrops.filter(d => {
+                    d.x += d.vx;
+                    d.y += d.vy;
+                    d.life--;
+                    // When drops hit bottom or expire, splat on paint canvas
+                    if (d.y >= canvas.height - 5 || d.life <= 0) {
+                        if (paintCtx) {
+                            paintCtx.fillStyle = d.color;
+                            const splatSize = d.size * (1 + Math.random());
+                            paintCtx.fillRect(d.x - splatSize, d.y - splatSize, splatSize * 2, splatSize * 2);
+                        }
+                        return false;
+                    }
+                    return true;
+                });
+                if (paintRainTimer <= 0) {
+                    paintRainActive = false;
+                    paintRainDrops = [];
+                }
+            }
         }
         
         // Render game
@@ -2219,6 +2294,7 @@
                             const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                             score += points;
                             killCount++;
+                            onEnemyKill();
                             
                             if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
                             
@@ -2246,6 +2322,16 @@
                 projectiles.forEach(proj => proj.draw());
                 enemies.forEach(enemy => enemy.draw());
                 
+                // Draw paint rain
+                if (paintRainActive && paintRainDrops.length > 0) {
+                    paintRainDrops.forEach(d => {
+                        ctx.fillStyle = d.color;
+                        ctx.beginPath();
+                        ctx.ellipse(d.x, d.y, d.size * 0.5, d.size, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                }
+                
                 // Draw chrome drops (squiggle icon)
                 chromeDrops.forEach(drop => {
                     ctx.save();
@@ -2272,6 +2358,16 @@
                 
                 // Draw UI
                 drawUI();
+                
+                // Pause overlay
+                if (gamePaused) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height - TOOLBAR_H);
+                    ctx.font = 'italic 22px Georgia, serif';
+                    ctx.fillStyle = '#888';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('paused', canvas.width/2, canvas.height/2);
+                }
                 
                 // UI elements removed for clean art look
                 
@@ -2468,9 +2564,9 @@
             
             if (!capturedArt) { ctx.restore(); return; }
             
-            // Frame dimensions — painting takes up most of the screen
-            const maxW = canvas.width * 0.88;
-            const maxH = canvas.height * 0.6;
+            // Frame dimensions — painting fills the screen generously
+            const maxW = canvas.width * 0.92;
+            const maxH = canvas.height * 0.68;
             const artRatio = capturedArt.width / capturedArt.height;
             let artW, artH;
             if (artRatio > maxW / maxH) {
@@ -2479,7 +2575,7 @@
                 artH = maxH; artW = maxH * artRatio;
             }
             const artX = (canvas.width - artW) / 2;
-            const artY = (canvas.height - artH) / 2 - 50;
+            const artY = (canvas.height - artH) / 2 - 35;
             
             // Drop shadow
             ctx.shadowColor = 'rgba(0,0,0,0.2)';
@@ -2649,31 +2745,75 @@
 
         // Draw UI — minimal, just the hang button
         let hangBtnGameRect = null;
+        let pauseBtnRect = null;
+        let endBtnRect = null;
+        const TOOLBAR_H = 44;
+        
         function drawUI() {
-            // Small "hang" button, bottom center — fades in after 5 seconds of play
-            const playTime = (Date.now() - gameStartTime) / 1000;
-            if (playTime < 5) return;
-            const alpha = Math.min(0.5, (playTime - 5) / 2); // fades to 50% opacity
+            // Bottom toolbar — semi-transparent bar with buttons
+            const barY = canvas.height - TOOLBAR_H;
             
             ctx.save();
-            ctx.globalAlpha = alpha;
-            const btnW = 60, btnH = 26;
-            const btnX = (canvas.width - btnW) / 2;
-            const btnY = canvas.height - btnH - 8;
-            hangBtnGameRect = { x: btnX, y: btnY, w: btnW, h: btnH };
-            
-            ctx.fillStyle = 'rgba(255,255,255,0.7)';
-            ctx.beginPath();
-            ctx.roundRect(btnX, btnY, btnW, btnH, 6);
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            // Frosted bar background
+            ctx.fillStyle = 'rgba(255,255,255,0.75)';
+            ctx.fillRect(0, barY, canvas.width, TOOLBAR_H);
+            ctx.strokeStyle = 'rgba(0,0,0,0.08)';
             ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, barY);
+            ctx.lineTo(canvas.width, barY);
             ctx.stroke();
             
+            const btnH = 28, btnY = barY + (TOOLBAR_H - btnH) / 2;
+            const cx = canvas.width / 2;
             ctx.font = '11px Arial';
-            ctx.fillStyle = '#555';
             ctx.textAlign = 'center';
-            ctx.fillText('🖼 hang', btnX + btnW/2, btnY + 17);
+            
+            // Pause button (left)
+            const pauseW = 55;
+            const pauseX = cx - 95;
+            pauseBtnRect = { x: pauseX, y: btnY, w: pauseW, h: btnH };
+            ctx.fillStyle = 'rgba(0,0,0,0.06)';
+            ctx.beginPath();
+            ctx.roundRect(pauseX, btnY, pauseW, btnH, 6);
+            ctx.fill();
+            ctx.fillStyle = '#666';
+            ctx.fillText('⏸ pause', pauseX + pauseW/2, btnY + 18);
+            
+            // Hang button (center)
+            const hangW = 60;
+            const hangX = cx - hangW/2;
+            hangBtnGameRect = { x: hangX, y: btnY, w: hangW, h: btnH };
+            ctx.fillStyle = 'rgba(74,53,32,0.12)';
+            ctx.beginPath();
+            ctx.roundRect(hangX, btnY, hangW, btnH, 6);
+            ctx.fill();
+            ctx.fillStyle = '#4a3520';
+            ctx.fillText('🖼 hang', hangX + hangW/2, btnY + 18);
+            
+            // End game button (right)
+            const endW = 50;
+            const endX = cx + 45;
+            endBtnRect = { x: endX, y: btnY, w: endW, h: btnH };
+            ctx.fillStyle = 'rgba(0,0,0,0.06)';
+            ctx.beginPath();
+            ctx.roundRect(endX, btnY, endW, btnH, 6);
+            ctx.fill();
+            ctx.fillStyle = '#999';
+            ctx.fillText('✕ end', endX + endW/2, btnY + 18);
+            
+            // Kill streak indicator (if active)
+            if (streakCount > 0) {
+                ctx.globalAlpha = 0.6;
+                ctx.font = '10px Arial';
+                ctx.fillStyle = '#888';
+                ctx.textAlign = 'left';
+                const dots = '●'.repeat(Math.min(streakCount, 10));
+                const remaining = 10 - Math.min(streakCount, 10);
+                const empties = '○'.repeat(remaining);
+                ctx.fillText(dots + empties, 8, barY + TOOLBAR_H/2 + 3);
+            }
+            
             ctx.restore();
         }
         
@@ -2774,18 +2914,32 @@
                 }
                 return;
             }
-            // Check hang button during gameplay
-            if (hangBtnGameRect && e.touches.length > 0) {
+            // Check toolbar buttons during gameplay
+            if (e.touches.length > 0) {
                 const t = e.touches[0];
                 const rect = canvas.getBoundingClientRect();
                 const tx = t.clientX - rect.left;
                 const ty = t.clientY - rect.top;
-                if (tx >= hangBtnGameRect.x && tx <= hangBtnGameRect.x + hangBtnGameRect.w &&
-                    ty >= hangBtnGameRect.y && ty <= hangBtnGameRect.y + hangBtnGameRect.h) {
-                    // Hang the current art — pause game and show gallery
+                
+                const inBtn = (btn) => btn && tx >= btn.x && tx <= btn.x + btn.w && ty >= btn.y && ty <= btn.y + btn.h;
+                
+                if (inBtn(hangBtnGameRect)) {
                     hangArtMidGame();
                     return;
                 }
+                if (inBtn(pauseBtnRect)) {
+                    gamePaused = !gamePaused;
+                    playSound('menu-tap');
+                    return;
+                }
+                if (inBtn(endBtnRect)) {
+                    // End game early — trigger death sequence
+                    player.health = 0;
+                    playSound('menu-tap');
+                    return;
+                }
+                // If touch is in toolbar area, don't pass to game controls
+                if (ty >= canvas.height - TOOLBAR_H) return;
             }
             
             // Show zone labels when first touching
@@ -2970,6 +3124,11 @@
             capturedArt = null;
             canvasCoverage = 0;
             hangMode = false;
+            gamePaused = false;
+            streakCount = 0;
+            paintRainActive = false;
+            paintRainDrops = [];
+            paintRainTimer = 0;
             soundDefs._killNote = 0; // Reset musical kill scale
             saveButtonRect = null;
             chromeDrops = [];
