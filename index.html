@@ -164,8 +164,13 @@
         let bgMusic = null;
 
         function initAudio() {
-            if (audioCtx) return;
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            // iOS/Safari: AudioContext starts suspended, must resume in user gesture
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         }
 
         function startMusic() {
@@ -384,6 +389,7 @@
 
         function playSound(name) {
             if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const def = soundDefs[name];
             if (!def) return;
             const now = performance.now();
