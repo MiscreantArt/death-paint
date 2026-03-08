@@ -77,6 +77,7 @@
         let dyingEnemiesExploded = false;
         let dyingDriftPixels = []; // pixels that drift outward after death
         let score = 0;
+        let killCount = 0;
         let lives = 3;
         let screenShake = 0;
         let testMode = true; // Test mode always on
@@ -1913,6 +1914,7 @@
                             // Apply diamond doubling only
                             const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                             score += points;
+                            killCount++;
                             
                             // Colorful pixel death explosion
                             if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -1948,6 +1950,7 @@
                         // Apply diamond doubling only
                         const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                         score += points;
+                        killCount++;
                         
                         // Colorful pixel death explosion
                         if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -2215,6 +2218,7 @@
                             
                             const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                             score += points;
+                            killCount++;
                             
                             if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
                             
@@ -2464,9 +2468,9 @@
             
             if (!capturedArt) { ctx.restore(); return; }
             
-            // Frame dimensions — painting centered with gallery wall space
-            const maxW = canvas.width * 0.7;
-            const maxH = canvas.height * 0.5;
+            // Frame dimensions — painting takes up most of the screen
+            const maxW = canvas.width * 0.88;
+            const maxH = canvas.height * 0.6;
             const artRatio = capturedArt.width / capturedArt.height;
             let artW, artH;
             if (artRatio > maxW / maxH) {
@@ -2514,10 +2518,10 @@
             ctx.fillStyle = '#444444';
             ctx.fillText(currentArtTitle, cx, labelY);
             
-            // Coverage
+            // Coverage + Kills
             ctx.font = '13px Georgia, serif';
             ctx.fillStyle = '#777777';
-            ctx.fillText(`${canvasCoverage}% canvas covered`, cx, labelY + 20);
+            ctx.fillText(`${canvasCoverage}% canvas covered  ·  ${killCount} kills`, cx, labelY + 20);
             
             // Buttons
             if (elapsed > 2) {
@@ -2977,6 +2981,7 @@
             gameState = 'playing';
             startMusic();
             score = 0;
+            killCount = 0;
             lives = 3;
             
             // Reset game variables
