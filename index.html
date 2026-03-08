@@ -72,7 +72,7 @@
         }
 
         // Game state
-        let gameState = 'menu'; // menu, playing, dying, gameOver
+        let gameState = 'menu'; // menu, playing, dying, gameOver, gallery
         let dyingStartTime = 0;
         let dyingEnemiesExploded = false;
         let dyingDriftPixels = []; // pixels that drift outward after death
@@ -2314,6 +2314,8 @@
                     ctx.fillStyle = `rgba(255,255,255,${Math.min(0.6, fadeAlpha)})`;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
+            } else if (gameState === 'gallery') {
+                drawHangMode();
             } else if (gameState === 'gameOver') {
                 if (hangMode) {
                     drawHangMode();
@@ -2370,7 +2372,49 @@
         let saveButtonRect = null;
         let hangButtonRect = null;
         let hangMode = false; // When true, show art in gallery frame view
+        let galleryReturnState = null; // State to return to after gallery
         
+        function hangArtMidGame() {
+            galleryReturnState = gameState;
+            gameState = 'gallery';
+            playSound('menu-tap');
+            // Capture current canvas state
+            if (!capturedArt || galleryReturnState === 'playing') {
+                const artScale = 2;
+                const artCanvas = document.createElement('canvas');
+                artCanvas.width = canvas.width * artScale;
+                artCanvas.height = canvas.height * artScale;
+                const artCtx = artCanvas.getContext('2d');
+                artCtx.fillStyle = '#ffffff';
+                artCtx.fillRect(0, 0, artCanvas.width, artCanvas.height);
+                if (paintCanvas) {
+                    artCtx.imageSmoothingEnabled = false;
+                    artCtx.drawImage(paintCanvas, 0, 0, artCanvas.width, artCanvas.height);
+                    artCtx.imageSmoothingEnabled = true;
+                }
+                // Bake current trails
+                fireTrails.forEach(trail => {
+                    artCtx.fillStyle = trail.color;
+                    const sx = trail.x * artScale;
+                    const sy = trail.y * artScale;
+                    const ss = trail.size * artScale;
+                    artCtx.fillRect(sx - ss, sy - ss, ss * 2, ss * 2);
+                });
+                capturedArt = artCanvas;
+                // Calculate coverage
+                const sampleData = artCtx.getImageData(0, 0, artCanvas.width, artCanvas.height).data;
+                let coloredPixels = 0;
+                for (let i = 0; i < sampleData.length; i += 16) {
+                    const r = sampleData[i], g = sampleData[i+1], b = sampleData[i+2];
+                    if (r !== 255 || g !== 255 || b !== 255) coloredPixels++;
+                }
+                canvasCoverage = Math.round((coloredPixels / (sampleData.length / 16)) * 100);
+            }
+            if (!currentArtTitle) {
+                currentArtTitle = artTitles[Math.floor(Math.random() * artTitles.length)] + Math.floor(Math.random() * 999);
+            }
+        }
+
         function saveArtwork() {
             if (!capturedArt) return;
             capturedArt.toBlob(async blob => {
@@ -2570,7 +2614,7 @@
             
             // Back / save buttons
             ctx.font = 'bold 12px Arial';
-            const backText = '← back';
+            const backText = galleryReturnState === 'playing' ? '← keep painting' : '← back';
             const saveText = 'save to photos';
             
             // Back button (top left)
@@ -2586,8 +2630,35 @@
             saveButtonRect = { x: canvas.width - 140, y: 10, w: 130, h: 30 };
         }
 
-        // Draw UI — clean art mode, nothing to show
-        function drawUI() {}
+        // Draw UI — minimal, just the hang button
+        let hangBtnGameRect = null;
+        function drawUI() {
+            // Small "hang" button, bottom center — fades in after 5 seconds of play
+            const playTime = (Date.now() - gameStartTime) / 1000;
+            if (playTime < 5) return;
+            const alpha = Math.min(0.5, (playTime - 5) / 2); // fades to 50% opacity
+            
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            const btnW = 60, btnH = 26;
+            const btnX = (canvas.width - btnW) / 2;
+            const btnY = canvas.height - btnH - 8;
+            hangBtnGameRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+            
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.beginPath();
+            ctx.roundRect(btnX, btnY, btnW, btnH, 6);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            ctx.font = '11px Arial';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('🖼 hang', btnX + btnW/2, btnY + 17);
+            ctx.restore();
+        }
         
         // Draw split-screen zone indicators
         function drawZoneIndicators() {
@@ -2664,6 +2735,17 @@
         function handleTouchStart(e) {
             e.preventDefault();
             initAudio();
+            if (gameState === 'gallery') {
+                // In gallery view — check buttons
+                if (e.touches.length > 0) {
+                    const t = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    mouse.x = t.clientX - rect.left;
+                    mouse.y = t.clientY - rect.top;
+                    handleClick();
+                }
+                return;
+            }
             if (gameState !== 'playing') {
                 // Handle menu/game over clicks
                 if (e.touches.length > 0) {
@@ -2674,6 +2756,19 @@
                     handleClick();
                 }
                 return;
+            }
+            // Check hang button during gameplay
+            if (hangBtnGameRect && e.touches.length > 0) {
+                const t = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const tx = t.clientX - rect.left;
+                const ty = t.clientY - rect.top;
+                if (tx >= hangBtnGameRect.x && tx <= hangBtnGameRect.x + hangBtnGameRect.w &&
+                    ty >= hangBtnGameRect.y && ty <= hangBtnGameRect.y + hangBtnGameRect.h) {
+                    // Hang the current art — pause game and show gallery
+                    hangArtMidGame();
+                    return;
+                }
             }
             
             // Show zone labels when first touching
@@ -2807,6 +2902,27 @@
                 if (gameState === 'menu') {
                     playSound('menu-tap');
                     startGame();
+                } else if (gameState === 'gallery') {
+                    const cx = mouse.x, cy = mouse.y;
+                    // Save button in gallery
+                    if (saveButtonRect) {
+                        if (cx >= saveButtonRect.x && cx <= saveButtonRect.x + saveButtonRect.w &&
+                            cy >= saveButtonRect.y && cy <= saveButtonRect.y + saveButtonRect.h) {
+                            saveArtwork();
+                            return;
+                        }
+                    }
+                    // Back button — return to game
+                    if (hangButtonRect) {
+                        if (cx >= hangButtonRect.x && cx <= hangButtonRect.x + hangButtonRect.w &&
+                            cy >= hangButtonRect.y && cy <= hangButtonRect.y + hangButtonRect.h) {
+                            gameState = galleryReturnState || 'playing';
+                            hangMode = false;
+                            playSound('menu-tap');
+                            return;
+                        }
+                    }
+                    return; // Gallery view — only buttons work
                 } else if (gameState === 'gameOver') {
                     const cx = mouse.x, cy = mouse.y;
                     // Save button
