@@ -1,0 +1,2818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>Death Paint</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        canvas {
+            border: 2px solid #cccccc;
+            background: #ffffff;
+            image-rendering: pixelated;
+        }
+        /* Mobile controls removed - whole screen is now control surface */
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="1024" height="768"></canvas>
+    
+    <!-- Mobile controls: whole screen is now the control surface -->
+
+    <script>
+        // Game setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Responsive canvas sizing - full screen on mobile
+        function resizeCanvas() {
+            if (window.innerWidth <= 768) {
+                // Mobile: use full screen
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            } else {
+                // Desktop: maintain aspect ratio with padding
+                canvas.width = Math.min(1024, window.innerWidth - 40);
+                canvas.height = Math.min(768, window.innerHeight - 40);
+            }
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game state
+        let gameState = 'menu'; // menu, playing, dying, gameOver
+        let dyingStartTime = 0;
+        let dyingEnemiesExploded = false;
+        let dyingDriftPixels = []; // pixels that drift outward after death
+        let score = 0;
+        let lives = 3;
+        let screenShake = 0;
+        let testMode = true; // Test mode always on
+        
+        // NEW JUICE FEATURES
+        let gameTime = 0; // Game time in seconds for progressive difficulty
+        let gameStartTime = 0; // Track when game started
+        let kills = 0; // Kill counter
+        
+        // Chrome power-up system
+        let chromeDrops = []; // Active chrome pickups on screen
+        let rainbowActive = false; // Player has rainbow tracer
+        let rainbowTimer = 0; // Frames remaining
+        let rainbowHue = 0; // Cycling hue
+        const RAINBOW_DURATION = 600; // ~10 seconds at 60fps
+        let lastChromeDrop = 0; // Timestamp of last drop
+        let killStreak = 0; // Kills without taking damage
+        let comboCount = 0; // Combo system
+        let lastKillTime = 0; // For combo timer
+        let comboMultiplier = 1; // Score multiplier
+        let slowMoFrames = 0; // Kill slowmo effect
+        let enemySpeedMultiplier = 1; // Progressive difficulty
+        let playerSpeedBonus = 0; // Progressive player speed
+        let floatingTexts = []; // Floating score numbers
+        let streakCallouts = []; // Streak callout messages
+        let comboDisplay = { active: false, text: '', scale: 1, alpha: 1, pulseTime: 0 }; // Combo display
+        
+        // Input handling
+        const keys = {};
+        const mouse = { x: 0, y: 0, down: false, lastMoveTime: 0 };
+        
+        // Split-screen dual-zone touch control system
+        const leftZone = {
+            active: false,
+            touchId: null,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            currentDirection: { x: 0, y: 0, angle: 0 },
+            deadZone: 8
+        };
+        
+        const rightZone = {
+            active: false,
+            touchId: null,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            currentDirection: { x: 0, y: 0, angle: 0 },
+            deadZone: 8
+        };
+        
+        // UI labels fade timer
+        let zoneLabelsVisible = 0;
+        
+        // Auto-fire system
+        let lastAutoFireTime = 0;
+        const autoFireRate = 200; // milliseconds
+        
+        // Continuous enemy spawning system
+        let lastEnemySpawnTime = 0;
+        let nextSpawnDelay = 800; // Start fast
+        let maxEnemiesOnScreen = 25;
+        
+        // Game objects arrays
+        let player;
+        let enemies = [];
+        let projectiles = [];
+        let enemyProjectiles = [];
+        let powerUps = [];
+        let particles = [];
+        let rainParticles = [];
+        let fireTrails = [];
+        // Offscreen bitmap — trails get baked here each frame to prevent array bloat
+        let paintCanvas = null;
+        let paintCtx = null;
+        let groundFlames = [];
+        let stars = [];
+        
+        // ===== SOUND SYSTEM (Web Audio API — core sounds only) =====
+        let audioCtx = null;
+        let bgMusic = null;
+        const soundBuffers = {};
+        const soundVolumes = {
+            'laser-shoot': 0.12,
+            'player-hit': 0.45,
+            'player-death': 0.6,
+            'enemy-hit': 0.25,
+            'enemy-death': 0.15,
+            'game-over': 0.6,
+            'kill-sound': 0.2
+        };
+
+        function initAudio() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            Object.keys(soundVolumes).forEach(name => {
+                fetch(`sounds/${name}.wav`)
+                    .then(r => r.arrayBuffer())
+                    .then(buf => audioCtx.decodeAudioData(buf))
+                    .then(decoded => { soundBuffers[name] = decoded; })
+                    .catch(() => {});
+            });
+        }
+
+        function startMusic() {
+            if (!audioCtx) return;
+            stopMusic();
+            bgMusic = new Audio('sounds/starshore-save-point.mp3');
+            bgMusic.loop = true;
+            bgMusic.volume = 0.15;
+            bgMusic.play().catch(() => {});
+        }
+        function stopMusic() {
+            if (bgMusic) { bgMusic.pause(); bgMusic.currentTime = 0; bgMusic = null; }
+        }
+
+        const soundThrottles = {};
+        const throttleMs = { 'laser-shoot': 180, 'enemy-hit': 80, 'kill-sound': 80 };
+
+        function playSound(name) {
+            if (!audioCtx || !soundBuffers[name] || !soundVolumes[name]) return;
+            const now = performance.now();
+            if (throttleMs[name]) {
+                if (soundThrottles[name] && now - soundThrottles[name] < throttleMs[name]) return;
+                soundThrottles[name] = now;
+            }
+            const source = audioCtx.createBufferSource();
+            const gain = audioCtx.createGain();
+            source.buffer = soundBuffers[name];
+            gain.gain.value = soundVolumes[name];
+            source.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(0);
+        }
+        
+        // Sprites - new structure for sprite sheets
+        const sprites = {
+            heroSheet: null,
+            enemySheets: {},
+            powerUpBirdSheets: {},
+            powerUps: {},
+            laser: null,
+            flame: null,
+            flameWalk: []
+        };
+        
+        // Row mapping for sprite sheet layout
+        const ROW_MAP = {
+            east:  { idle: 0, walk: 1 },
+            west:  { idle: 2, walk: 3 },
+            north: { idle: 4, walk: 5 },
+            south: { idle: 6, walk: 7 }
+        };
+        
+        // Helper function to draw sprites from sprite sheets
+        function drawSprite(spriteSheet, direction, animation, frame, x, y, size) {
+            if (!spriteSheet || !spriteSheet.complete) return false;
+            const dirMap = ROW_MAP[direction] || ROW_MAP['east'];
+            if (!dirMap) return false;
+            const row = dirMap[animation];
+            if (row === undefined) return false;
+            const col = frame % 6;
+            const cs = 96;
+            try {
+                ctx.drawImage(spriteSheet, col * cs, row * cs, cs, cs, x - size, y - size, size * 2, size * 2);
+                return true;
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        // Power-up types with moonbird mapping
+        const powerUpTypes = [
+            { type: 'chromie', birdId: 12, color: '#ff00ff', duration: 0 },    // Circle wave kills all enemies
+            { type: 'crown', birdId: 952, color: '#ffd700', duration: 0 },     // Score reward (instant +500)
+            { type: 'diamond', birdId: 9619, color: '#00ccff', duration: 15000 }, // Double points
+            { type: 'duck', birdId: 5568, color: '#ffdd00', duration: 10000 },   // Duck noises (cosmetic joke)
+            { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 },  // Death touch - melee kills, but vulnerable to shots
+            { type: 'halo', birdId: 6295, color: '#ffd700', duration: 8000 },    // Immunity - can't take damage
+            { type: 'raincloud', birdId: 429, color: '#aaccff', duration: 10000 }, // Rain - slows all enemies
+            { type: 'flame', birdId: 7861, color: '#ff4400', duration: 10000 }     // Animated flame - damage boost
+        ];
+        
+        // Player buffs
+        let playerBuffs = {
+            diamond: 0,  // Double points
+            duck: 0,     // Cosmetic duck noises
+            skully: 0,   // Death touch
+            halo: 0,     // Immunity
+            raincloud: 0, // Slow enemies
+            flame: 0     // Damage boost
+        };
+        
+        // Sprite loading - updated for sprite sheets
+        async function loadSprites() {
+            // Load hero sprite sheet (bird ID 616)
+            sprites.heroSheet = new Image();
+            sprites.heroSheet.src = 'sheets/2755.png';
+            
+            // Wait for hero sheet to load
+            await new Promise((resolve) => {
+                sprites.heroSheet.onload = resolve;
+                sprites.heroSheet.onerror = () => { 
+                    console.warn('Failed to load hero sprite sheet'); 
+                    resolve(); 
+                };
+            });
+            
+            // Pre-load ALL enemy sheets so they have sprites ready
+            [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290].forEach(id => loadEnemySprites(id));
+            
+            // Preload Moonbird #12 sheet (squiggle bird) + chromie icon for power-up
+            sprites.squiggleSheet = new Image();
+            sprites.squiggleSheet.src = 'sheets/12.png';
+            sprites.chromieIcon = new Image();
+            sprites.chromieIcon.src = 'assets/powerup-chromie.png';
+        }
+        
+        // Power-up bird map for hero sprite swapping
+        const powerUpBirdMap = {
+            'diamond': 9619, 'duck': 5568, 'skully': 8677, 'halo': 6295,
+            'raincloud': 429, 'flame': 7861, 'crown': 952, 'chromie': 12
+        };
+        
+        // Lazy-load power-up bird sprite sheets on first collect
+        function loadPowerUpBird(powerUpType) {
+            if (sprites.powerUpBirdSheets[powerUpType]) return;
+            const birdId = powerUpBirdMap[powerUpType];
+            if (!birdId) return;
+            
+            sprites.powerUpBirdSheets[powerUpType] = new Image();
+            sprites.powerUpBirdSheets[powerUpType].src = `sheets/${birdId}.png`;
+        }
+        
+        // Lazy-load enemy sprite sheets on first spawn
+        function loadEnemySprites(id) {
+            if (sprites.enemySheets[id]) return;
+            
+            const img = new Image();
+            img.src = `sheets/${id}.png`;
+            sprites.enemySheets[id] = img;
+            
+            // If image fails or takes too long, retry once
+            img.onerror = () => {
+                console.warn(`Failed to load sheet ${id}, retrying...`);
+                setTimeout(() => {
+                    const retry = new Image();
+                    retry.src = `sheets/${id}.png?t=${Date.now()}`;
+                    sprites.enemySheets[id] = retry;
+                }, 1000);
+            };
+        }
+        
+        // Particle system
+        // Bright pixel colors for death explosions and trails
+        const pixelColors = [
+            '#ff0055', '#ff4400', '#ffaa00', '#ffff00', '#00ff88',
+            '#00ccff', '#4444ff', '#aa00ff', '#ff00ff', '#ff6699',
+            '#00ffcc', '#88ff00', '#ff8800', '#ff0000', '#00aaff'
+        ];
+
+        // Each grunt favors a color — ~40% of their splat uses it
+        const gruntFavoriteColor = {
+            3372: '#ff0055',  // hot pink
+            5463: '#00ccff',  // cyan
+            7473: '#88ff00',  // lime green
+            9638: '#ffaa00',  // orange
+            668:  '#aa00ff',  // purple
+            3047: '#ff4400',  // red-orange
+        };
+
+        function pickSplatColor(favoriteColor) {
+            if (favoriteColor && Math.random() < 0.4) return favoriteColor;
+            return pixelColors[Math.floor(Math.random() * pixelColors.length)];
+        }
+
+        function spawnPixelDeath(x, y, favoriteColor) {
+            // Temporary burst particles (animated, fade out)
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 3 + Math.random() * 10;
+                particles.push(new Particle(
+                    x + (Math.random() - 0.5) * 6,
+                    y + (Math.random() - 0.5) * 6,
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed,
+                    pickSplatColor(favoriteColor),
+                    15 + Math.floor(Math.random() * 20),
+                    0.5 + Math.random() * 1.2
+                ));
+            }
+            // MASSIVE paint bomb — pixels get SMALLER the further from center
+            // Big fat core pixels
+            for (let i = 0; i < 120; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 25;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, favoriteColor);
+                t.size = 2.5 + Math.random() * 2; // Big
+                fireTrails.push(t);
+            }
+            // Medium mid pixels
+            for (let i = 0; i < 80; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 20 + Math.random() * 45;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, favoriteColor);
+                t.size = 1.5 + Math.random() * 1.5; // Medium
+                fireTrails.push(t);
+            }
+            // Tiny outer fling
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 50 + Math.random() * 70;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, favoriteColor);
+                t.size = 0.5 + Math.random() * 1; // Tiny
+                fireTrails.push(t);
+            }
+        }
+
+        // Dark psychedelic splat — mostly black with neon accents
+        const darkPsychColors = ['#111111', '#000000', '#1a001a', '#0a0a0a', '#220022', '#ff00ff', '#00ffff', '#ff0066', '#6600ff'];
+        function spawnDarkSplat(x, y) {
+            // Burst particles
+            for (let i = 0; i < 150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 5 + Math.random() * 18;
+                const c = Math.random() < 0.7 ? darkPsychColors[Math.floor(Math.random() * 4)] : darkPsychColors[4 + Math.floor(Math.random() * 5)];
+                particles.push(new Particle(
+                    x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6,
+                    Math.cos(angle) * speed, Math.sin(angle) * speed,
+                    c, 15 + Math.floor(Math.random() * 20), 0.5 + Math.random() * 1.2
+                ));
+            }
+            // Massive dark core — 3x size
+            for (let i = 0; i < 400; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 120;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 4 + Math.random() * 5;
+                t.color = Math.random() < 0.75 ? darkPsychColors[Math.floor(Math.random() * 4)] : darkPsychColors[4 + Math.floor(Math.random() * 5)];
+                fireTrails.push(t);
+            }
+            // Medium ring
+            for (let i = 0; i < 300; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 90 + Math.random() * 180;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 2.5 + Math.random() * 3;
+                t.color = Math.random() < 0.6 ? '#000000' : darkPsychColors[4 + Math.floor(Math.random() * 5)];
+                fireTrails.push(t);
+            }
+            // Outer fling
+            for (let i = 0; i < 150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 210 + Math.random() * 270;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 1 + Math.random() * 2;
+                t.color = darkPsychColors[Math.floor(Math.random() * darkPsychColors.length)];
+                fireTrails.push(t);
+            }
+        }
+
+        function spawnWhitePaintBomb(x, y) {
+            const eraseRadius = 160;
+            // Remove any unbaked color trails in current frame's array
+            for (let i = fireTrails.length - 1; i >= 0; i--) {
+                const dx = fireTrails[i].x - x;
+                const dy = fireTrails[i].y - y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const edgeVariance = eraseRadius * (0.6 + Math.random() * 0.5);
+                if (dist < edgeVariance && fireTrails[i].color !== '#ffffff') {
+                    fireTrails.splice(i, 1);
+                }
+            }
+            // Dense white core — covers baked pixels underneath
+            for (let i = 0; i < 350; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * eraseRadius * 0.8;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 4 + Math.random() * 5;
+                t.color = '#ffffff';
+                fireTrails.push(t);
+            }
+            // Splattery edges — random spray fingers reaching out
+            for (let i = 0; i < 14; i++) {
+                const fingerAngle = Math.random() * Math.PI * 2;
+                const fingerLen = eraseRadius + Math.random() * 140;
+                const fingerWidth = 10 + Math.random() * 18;
+                for (let j = 0; j < 25; j++) {
+                    const along = eraseRadius * 0.4 + Math.random() * fingerLen * 0.7;
+                    const across = (Math.random() - 0.5) * fingerWidth;
+                    const px = x + Math.cos(fingerAngle) * along + Math.cos(fingerAngle + Math.PI/2) * across;
+                    const py = y + Math.sin(fingerAngle) * along + Math.sin(fingerAngle + Math.PI/2) * across;
+                    const t = new FireTrail(px, py);
+                    t.size = 1.2 + Math.random() * 2.5 * (1 - along / (eraseRadius + 110));
+                    t.color = '#ffffff';
+                    fireTrails.push(t);
+                }
+            }
+            // Random scattered white droplets around edges
+            for (let i = 0; i < 60; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = eraseRadius * 0.7 + Math.random() * 80;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 0.8 + Math.random() * 1.5;
+                t.color = '#ffffff';
+                fireTrails.push(t);
+            }
+        }
+
+        class Particle {
+            constructor(x, y, vx, vy, color, life, size = 2) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.color = color;
+                this.life = life;
+                this.maxLife = life;
+                this.size = size;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.vx *= 0.99;
+                this.vy *= 0.99;
+            }
+            
+            draw() {
+                const alpha = this.life / this.maxLife;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 3;
+                ctx.shadowColor = this.color;
+                // Pixel squares, not circles
+                ctx.fillRect(this.x - this.size, this.y - this.size, this.size * 2, this.size * 2);
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            }
+        }
+        
+        // Text particle for duck power-up
+        class TextParticle {
+            constructor(x, y, text, color, life) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.life = life;
+                this.maxLife = life;
+                this.vy = -1; // Float upward
+            }
+            
+            update() {
+                this.y += this.vy;
+                this.life--;
+            }
+            
+            draw() {
+                const alpha = this.life / this.maxLife;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = this.color;
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+        
+        // Rain particle for raincloud power-up
+        class RainParticle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vy = 3 + Math.random() * 2;
+                this.length = 4 + Math.random() * 2; // FIXED: Shorter rain streaks (4-6px)
+            }
+            
+            update() {
+                this.y += this.vy;
+                return this.y > canvas.height + 10;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.strokeStyle = '#aaccff';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.3; // FIXED: More subtle rain (0.3 opacity)
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x, this.y + this.length);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+        
+        // Fire trail left by enemies
+        class FireTrail {
+            constructor(x, y, favoriteColor) {
+                this.x = x + (Math.random() - 0.5) * 24;
+                this.y = y + (Math.random() - 0.5) * 24;
+                this.size = 0.8 + Math.random() * 1.5;
+                this.color = pickSplatColor(favoriteColor);
+                this.permanent = true;
+            }
+            
+            update() {
+                return false; // Never die
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - this.size, this.y - this.size, this.size * 2, this.size * 2);
+            }
+        }
+        
+        // NEW: GroundFlame class for persistent ground flames
+        class GroundFlame {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.life = 360; // 6 seconds at 60fps
+                this.maxLife = 360;
+                this.size = 5 + Math.random() * 3;
+                this.color = pixelColors[Math.floor(Math.random() * pixelColors.length)];
+                this.pulseOffset = Math.random() * Math.PI * 2;
+            }
+            
+            update() {
+                this.life--;
+                return this.life <= 0;
+            }
+            
+            draw() {
+                const alpha = Math.min(1, this.life / (this.maxLife * 0.2)) * 0.6;
+                const pulse = 0.8 + Math.sin(performance.now() * 0.005 + this.pulseOffset) * 0.2;
+                const sz = this.size * pulse * (0.5 + 0.5 * (this.life / this.maxLife));
+                
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                
+                // Glowing colorful pixel square
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 6;
+                ctx.shadowColor = this.color;
+                ctx.fillRect(this.x - sz, this.y - sz, sz * 2, sz * 2);
+                
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            }
+        }
+        
+        // NEW: FloatingText class for score numbers
+        class FloatingText {
+            constructor(x, y, text, color = '#ffffff') {
+                this.x = x;
+                this.y = y;
+                this.startY = y;
+                this.text = text;
+                this.color = color;
+                this.life = 60; // 1 second at 60fps
+                this.maxLife = 60;
+            }
+            
+            update() {
+                this.y = this.startY - (60 - this.life) * 1.5; // Rise upward
+                this.life--;
+                return this.life <= 0;
+            }
+            
+            draw() {
+                const alpha = this.life / this.maxLife;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                
+                // Black outline for readability
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 3;
+                ctx.strokeText(this.text, this.x, this.y);
+                
+                // White text
+                ctx.fillStyle = this.color;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+        
+        // NEW: StreakCallout class for kill streak messages
+        class StreakCallout {
+            constructor(text, color) {
+                this.text = text;
+                this.color = color;
+                this.scale = 2.0;
+                this.alpha = 1.0;
+                this.phase = 'shrink'; // shrink -> hold -> fade
+                this.timer = 0;
+            }
+            
+            update() {
+                this.timer++;
+                
+                if (this.phase === 'shrink') {
+                    // Shrink from 2.0 to 1.0 over 18 frames (0.3s)
+                    if (this.timer <= 18) {
+                        this.scale = 2.0 - (this.timer / 18);
+                    } else {
+                        this.scale = 1.0;
+                        this.phase = 'hold';
+                        this.timer = 0;
+                    }
+                } else if (this.phase === 'hold') {
+                    // Hold for 60 frames (1s)
+                    if (this.timer >= 60) {
+                        this.phase = 'fade';
+                        this.timer = 0;
+                    }
+                } else if (this.phase === 'fade') {
+                    // Fade out over 30 frames (0.5s)
+                    if (this.timer <= 30) {
+                        this.alpha = 1.0 - (this.timer / 30);
+                    } else {
+                        return true; // Remove this callout
+                    }
+                }
+                
+                return false;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.font = `bold ${Math.floor(48 * this.scale)}px Arial`;
+                ctx.textAlign = 'center';
+                
+                // Thick shadow
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#000000';
+                ctx.shadowOffsetX = 3;
+                ctx.shadowOffsetY = 3;
+                
+                // Black outline
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 4;
+                ctx.strokeText(this.text, canvas.width / 2, canvas.height / 2);
+                
+                // Colored text
+                ctx.fillStyle = this.color;
+                ctx.fillText(this.text, canvas.width / 2, canvas.height / 2);
+                
+                // Reset shadow
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.restore();
+            }
+        }
+        
+        // Player class
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 38;
+                this.speed = 2.5;
+                this.health = 3;
+                this.animFrame = 0;
+                this.animTime = 0;
+                this.isMoving = false;
+                this.lastShot = 0;
+                this.shootDelay = 200;
+                this.currentDirection = 'east'; // Track current facing direction
+                this.lastAimDirection = 'east'; // Track last aim direction
+            }
+            
+            update() {
+                this.isMoving = false;
+                let dx = 0, dy = 0;
+                
+                // Left zone controls movement
+                if (leftZone.active && (leftZone.currentDirection.x !== 0 || leftZone.currentDirection.y !== 0)) {
+                    // Touch movement - live steering while left finger is down
+                    dx = leftZone.currentDirection.x;
+                    dy = leftZone.currentDirection.y;
+                } else if (!leftZone.active && !rightZone.active) {
+                    // Desktop controls - only when not using any touch zones
+                    if (keys['w'] || keys['ArrowUp']) dy -= 1;
+                    if (keys['s'] || keys['ArrowDown']) dy += 1;
+                    if (keys['a'] || keys['ArrowLeft']) dx -= 1;
+                    if (keys['d'] || keys['ArrowRight']) dx += 1;
+                }
+                
+                // Apply movement ONLY if there's input
+                if (dx !== 0 || dy !== 0) {
+                    this.isMoving = true;
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    if (length > 0) {
+                        dx /= length;
+                        dy /= length;
+                    }
+                    
+                    const speed = (this.speed + playerSpeedBonus) * (playerBuffs.speed > 0 ? 1.5 : 1);
+                    this.x += dx * speed;
+                    this.y += dy * speed;
+                    
+                    // Keep player in bounds
+                    this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                    this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                }
+                
+                // Determine facing direction with correct priority:
+                // 1. RIGHT thumb (aim zone) active → face aim direction (highest priority)
+                // 2. ONLY LEFT thumb (move zone) active → face movement direction (medium priority)  
+                // 3. Neither active → keep last facing direction (lowest priority)
+                // Desktop: mouse overrides when actively aiming, movement keys when mouse inactive
+                
+                const now = Date.now();
+                const mouseRecentlyMoved = (now - mouse.lastMoveTime) < 2000; // 2 second threshold
+                
+                let newDirection = null;
+                
+                // Priority 1: RIGHT thumb (aim zone) active - highest priority
+                if (rightZone.active && (rightZone.currentDirection.x !== 0 || rightZone.currentDirection.y !== 0)) {
+                    newDirection = this.getCardinalDirection(rightZone.currentDirection.x, rightZone.currentDirection.y);
+                }
+                // Priority 1b: Desktop mouse aiming (when mouse recently moved or actively clicking)
+                else if (!leftZone.active && !rightZone.active && mouse.x !== undefined && (mouseRecentlyMoved || mouse.down)) {
+                    const aimDx = mouse.x - this.x;
+                    const aimDy = mouse.y - this.y;
+                    if (aimDx !== 0 || aimDy !== 0) {
+                        newDirection = this.getCardinalDirection(aimDx, aimDy);
+                    }
+                }
+                // Priority 2: ONLY LEFT thumb (move zone) active - medium priority
+                else if (leftZone.active && !rightZone.active && (leftZone.currentDirection.x !== 0 || leftZone.currentDirection.y !== 0)) {
+                    newDirection = this.getCardinalDirection(leftZone.currentDirection.x, leftZone.currentDirection.y);
+                }
+                // Priority 2b: Desktop movement keys (when mouse hasn't moved recently)
+                else if (!leftZone.active && !rightZone.active && !mouseRecentlyMoved && (dx !== 0 || dy !== 0)) {
+                    newDirection = this.getCardinalDirection(dx, dy);
+                }
+                
+                // Update facing direction or keep last direction (Priority 3)
+                if (newDirection !== null) {
+                    this.currentDirection = newDirection;
+                    this.lastAimDirection = newDirection; // Update last known direction
+                } else {
+                    // Priority 3: Keep last facing direction
+                    this.currentDirection = this.lastAimDirection || 'east';
+                }
+                
+                // Animation
+                this.animTime++;
+                if (this.animTime % 8 === 0) {
+                    this.animFrame = (this.animFrame + 1) % 6;
+                }
+                
+                // Shooting logic
+                const shootNow = Date.now();
+                
+                // Right zone auto-fire: while right thumb is down and dragged past dead zone
+                const shouldAutoFire = rightZone.active && (rightZone.currentDirection.x !== 0 || rightZone.currentDirection.y !== 0);
+                
+                // Manual shooting (desktop) - only when not using touch zones
+                const manualShoot = !leftZone.active && !rightZone.active && (mouse.down || keys[' ']);
+                
+                if (shouldAutoFire && shootNow - lastAutoFireTime > autoFireRate) {
+                    this.shoot(rightZone.currentDirection.angle);
+                    lastAutoFireTime = shootNow;
+                } else if (manualShoot && shootNow - this.lastShot > this.shootDelay) {
+                    this.shoot();
+                    this.lastShot = shootNow;
+                }
+            }
+            
+            // Helper method to determine cardinal direction from a vector
+            // Diagonal favors east/west; north/south only when vertical is clearly dominant
+            getCardinalDirection(dx, dy) {
+                const absDx = Math.abs(dx);
+                const absDy = Math.abs(dy);
+                
+                if (absDy > absDx * 2) {
+                    // Strongly vertical — use north/south
+                    return dy < 0 ? 'north' : 'south';
+                } else if (absDx > 0.01) {
+                    // Any meaningful horizontal component — use east/west
+                    return dx > 0 ? 'east' : 'west';
+                } else {
+                    return dy < 0 ? 'north' : 'south';
+                }
+            }
+            
+            shoot(forceAngle = null) {
+                // Use forced angle (mobile auto-fire) or mouse position (desktop)
+                const angle = forceAngle !== null ? forceAngle : Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                const damage = playerBuffs.flame > 0 ? 2 : 1;
+                
+                // Laser spawns from the bird's eyes — fixed position based on facing
+                // Eyes are ~30% from top of sprite (y - size*0.3 above center)
+                const aimDirX = Math.cos(angle);
+                const aimDirY = Math.sin(angle);
+                
+                // Eye position: fixed Y at eye level, slight X offset toward facing
+                let eyeOffX = 0;
+                if (this.currentDirection === 'east') eyeOffX = this.size * 0.15;
+                else if (this.currentDirection === 'west') eyeOffX = -this.size * 0.15;
+                const eyeX = this.x + eyeOffX;
+                const eyeY = this.y - this.size * 0.3;
+                
+                // Regular dual laser beams (offset 3-4px perpendicular to travel direction)
+                // Two beams, one per eye — offset perpendicular to aim
+                const perpX = -Math.sin(angle) * 5;
+                const perpY = Math.cos(angle) * 5;
+                projectiles.push(new LaserBeam(eyeX + perpX, eyeY + perpY, angle, 14, damage, '#ff2200', 0));
+                projectiles.push(new LaserBeam(eyeX - perpX, eyeY - perpY, angle, 14, damage, '#ff2200', 0));
+                playSound('laser-shoot');
+                
+                // NEW: Micro screen shake on shooting
+                screenShake = 1;
+                
+                // Duck power-up: Show "QUACK!" text particles instead of normal effects
+                if (playerBuffs.duck > 0) {
+                    // Create "QUACK!" text particle
+                    particles.push(new TextParticle(
+                        eyeX + Math.cos(angle) * 20,
+                        eyeY + Math.sin(angle) * 20,
+                        "QUACK!",
+                        '#ffdd00',
+                        30
+                    ));
+                    
+                    // Yellow duck particles
+                    for (let i = 0; i < 5; i++) {
+                        particles.push(new Particle(
+                            eyeX + (Math.random() - 0.5) * 8,
+                            eyeY + (Math.random() - 0.5) * 8,
+                            (Math.random() - 0.5) * 2,
+                            (Math.random() - 0.5) * 2,
+                            '#ffdd00',
+                            12,
+                            2
+                        ));
+                    }
+                } else {
+                    // Visor glow particles (yellow)
+                    for (let i = 0; i < 8; i++) {
+                        particles.push(new Particle(
+                            eyeX + (Math.random() - 0.5) * 6,
+                            eyeY + (Math.random() - 0.5) * 6,
+                            (Math.random() - 0.5) * 1,
+                            (Math.random() - 0.5) * 1,
+                            '#ffdd00',
+                            8,
+                            1
+                        ));
+                    }
+                }
+            }
+            
+            takeDamage() {
+                // Halo immunity - no damage from anything
+                if (playerBuffs.halo > 0) {
+                    // Show immunity effect
+                    for (let i = 0; i < 10; i++) {
+                        particles.push(new Particle(
+                            this.x + (Math.random() - 0.5) * 50,
+                            this.y + (Math.random() - 0.5) * 50,
+                            (Math.random() - 0.5) * 2,
+                            (Math.random() - 0.5) * 2,
+                            '#ffd700',
+                            15,
+                            2
+                        ));
+                    }
+                    return;
+                }
+                
+                this.health--;
+                screenShake = 10;
+                
+                // NEW: Reset kill streak when player takes damage
+                killStreak = 0;
+                
+                // Pixel splatter on hit — permanent like trails
+                for (let i = 0; i < 30; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 10 + Math.random() * 40;
+                    fireTrails.push(new FireTrail(
+                        this.x + Math.cos(angle) * dist,
+                        this.y + Math.sin(angle) * dist
+                    ));
+                }
+                // Also burst particles (temporary, for impact feel)
+                for (let i = 0; i < 20; i++) {
+                    particles.push(new Particle(
+                        this.x + (Math.random() - 0.5) * 30,
+                        this.y + (Math.random() - 0.5) * 30,
+                        (Math.random() - 0.5) * 8,
+                        (Math.random() - 0.5) * 8,
+                        pixelColors[Math.floor(Math.random() * pixelColors.length)],
+                        15,
+                        0.8 + Math.random() * 1.2
+                    ));
+                }
+            }
+            
+            draw() {
+                ctx.save();
+                
+                // Subtle drop shadow below character
+                ctx.fillStyle = 'rgba(0,0,0,0.12)';
+                ctx.beginPath();
+                ctx.ellipse(this.x, this.y + this.size * 0.8, this.size * 0.4, this.size * 0.1, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw sprite using sprite sheets
+                // Determine which sprite sheet to use based on active power-ups
+                // Priority: skully > halo > duck > raincloud > flame > diamond (most visually distinctive first)
+                const animationType = this.isMoving ? 'walk' : 'idle';
+                let spriteSheet = sprites.heroSheet;
+                
+                // Squiggle bird override when rainbow tracer active (east-only sheet, force east)
+                let forceEast = false;
+                if (rainbowActive && sprites.squiggleSheet && sprites.squiggleSheet.complete) {
+                    spriteSheet = sprites.squiggleSheet;
+                    forceEast = true;
+                } else if (playerBuffs.skully > 0 && sprites.powerUpBirdSheets.skully && sprites.powerUpBirdSheets.skully.complete) {
+                    spriteSheet = sprites.powerUpBirdSheets.skully;
+                } else if (playerBuffs.halo > 0 && sprites.powerUpBirdSheets.halo && sprites.powerUpBirdSheets.halo.complete) {
+                    spriteSheet = sprites.powerUpBirdSheets.halo;
+                } else if (playerBuffs.duck > 0 && sprites.powerUpBirdSheets.duck && sprites.powerUpBirdSheets.duck.complete) {
+                    spriteSheet = sprites.powerUpBirdSheets.duck;
+                } else if (playerBuffs.raincloud > 0 && sprites.powerUpBirdSheets.raincloud && sprites.powerUpBirdSheets.raincloud.complete) {
+                    spriteSheet = sprites.powerUpBirdSheets.raincloud;
+                } else if (playerBuffs.flame > 0 && sprites.powerUpBirdSheets.flame && sprites.powerUpBirdSheets.flame.complete) {
+                    spriteSheet = sprites.powerUpBirdSheets.flame;
+                } else if (playerBuffs.diamond > 0 && sprites.powerUpBirdSheets.diamond && sprites.powerUpBirdSheets.diamond.complete) {
+                    spriteSheet = sprites.powerUpBirdSheets.diamond;
+                }
+                
+                // Use the drawSprite helper function
+                const drawDir = forceEast ? 'east' : this.currentDirection;
+                // Flip horizontally for west-facing when using east-only sheet
+                if (forceEast && this.currentDirection === 'west') {
+                    ctx.save();
+                    ctx.translate(this.x, 0);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-this.x, 0);
+                    if (!drawSprite(spriteSheet, 'east', animationType, this.animFrame, this.x, this.y, this.size)) {
+                        ctx.fillStyle = '#00ffff';
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                } else
+                if (!drawSprite(spriteSheet, drawDir, animationType, this.animFrame, this.x, this.y, this.size)) {
+                    // Ultimate fallback circle
+                    ctx.fillStyle = '#00ffff';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size * 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        // Enemy class
+        class Enemy {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 36;
+                
+                // Grunts + rare bosses
+                const roll = Math.random();
+                if (roll < 0.88) {
+                    // Regular grunts — colorful splatter
+                    const grunts = [3372, 5463, 7473, 9638, 668, 3047];
+                    this.spriteId = grunts[Math.floor(Math.random() * grunts.length)];
+                    this.favoriteColor = gruntFavoriteColor[this.spriteId] || null;
+                    this.health = 2;
+                    this.speed = 1.2 + Math.random() * 0.8;
+                    this.tier = 1;
+                    this.isBoss = false;
+                    this.isDarkBoss = false;
+                } else if (roll < 0.94) {
+                    // White bosses — erase color on death
+                    const whiteBosses = [2941, 8959, 2080, 3904, 8398, 5249];
+                    this.spriteId = whiteBosses[Math.floor(Math.random() * whiteBosses.length)];
+                    this.health = 8;
+                    this.speed = 0.8 + Math.random() * 0.4;
+                    this.tier = 2;
+                    this.size = 55;
+                    this.isBoss = true;
+                    this.isDarkBoss = false;
+                } else {
+                    // Dark purple bosses — BIG, splatter mostly black/psychedelic
+                    const darkBosses = [6949, 1729, 2290];
+                    this.spriteId = darkBosses[Math.floor(Math.random() * darkBosses.length)];
+                    this.health = 10;
+                    this.speed = 0.6 + Math.random() * 0.3;
+                    this.tier = 3;
+                    this.size = 65; // Even bigger
+                    this.isBoss = true;
+                    this.isDarkBoss = true;
+                }
+                
+                // Lazy-load sprite sheet for this enemy type
+                loadEnemySprites(this.spriteId);
+                
+                this.animFrame = 0;
+                this.animTime = 0;
+                this.lastShot = 0;
+                this.shootDelay = 2000 + Math.random() * 3000;
+                this.angle = 0;
+                this.currentDirection = 'east'; // Track current facing direction
+                
+                // NEW: Hit feedback properties
+                this.hitFlash = 0; // Hit flash effect
+                this.knockbackX = 0; // Knockback velocity X
+                this.knockbackY = 0; // Knockback velocity Y
+            }
+            
+            update() {
+                // NEW: Apply knockback physics
+                if (this.knockbackX !== 0 || this.knockbackY !== 0) {
+                    this.x += this.knockbackX;
+                    this.y += this.knockbackY;
+                    this.knockbackX *= 0.8; // Decay knockback
+                    this.knockbackY *= 0.8;
+                    if (Math.abs(this.knockbackX) < 0.1) this.knockbackX = 0;
+                    if (Math.abs(this.knockbackY) < 0.1) this.knockbackY = 0;
+                }
+                
+                // NEW: Update hit flash
+                if (this.hitFlash > 0) {
+                    this.hitFlash--;
+                }
+                
+                // Move toward player
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 0) {
+                    // Apply raincloud slowing effect and progressive difficulty
+                    const raincloudslow = playerBuffs.raincloud > 0 ? 0.4 : 1;
+                    const finalSpeed = this.speed * enemySpeedMultiplier * raincloudslow;
+                    this.x += (dx / dist) * finalSpeed;
+                    this.y += (dy / dist) * finalSpeed;
+                    this.angle = Math.atan2(dy, dx);
+                    
+                    // Update facing direction toward player
+                    this.currentDirection = this.getCardinalDirection(dx, dy);
+                    
+                    // Drop permanent color pixels — builds up like Jackson Pollock (not for bosses)
+                    // Reduced: 1 pixel every 4 frames to prevent canvas saturation
+                    if (!this.isBoss && Math.random() < 0.25) {
+                        fireTrails.push(new FireTrail(
+                            this.x + (Math.random() - 0.5) * 30,
+                            this.y + (Math.random() - 0.5) * 20,
+                            this.favoriteColor
+                        ));
+                    }
+                    
+                    // Drop ground flames less frequently (every 12 frames, cap at 150)
+                    if (this.animTime % 12 === 0 && groundFlames.length < 150) {
+                        groundFlames.push(new GroundFlame(
+                            this.x + (Math.random() - 0.5) * 14,
+                            this.y + this.size * 0.4
+                        ));
+                    }
+                }
+                
+                // Animation — fast legs to match speed
+                this.animTime++;
+                if (this.animTime % 4 === 0) {
+                    this.animFrame = (this.animFrame + 1) % 6;
+                }
+                
+                // Enemies no longer shoot — they charge + leave fire trails
+            }
+            
+            // Helper method to determine cardinal direction from a vector
+            // Diagonal favors east/west; north/south only when vertical is clearly dominant
+            getCardinalDirection(dx, dy) {
+                const absDx = Math.abs(dx);
+                const absDy = Math.abs(dy);
+                
+                if (absDy > absDx * 2) {
+                    // Strongly vertical — use north/south
+                    return dy < 0 ? 'north' : 'south';
+                } else if (absDx > 0.01) {
+                    // Any meaningful horizontal component — use east/west
+                    return dx > 0 ? 'east' : 'west';
+                } else {
+                    return dy < 0 ? 'north' : 'south';
+                }
+            }
+            
+            shoot() {
+                const angle = Math.atan2(player.y - this.y, player.x - this.x);
+                enemyProjectiles.push(new Projectile(this.x, this.y, angle, 2.8, 1, '#ff4400', true));
+                
+                // Muzzle flash
+                for (let i = 0; i < 3; i++) {
+                    particles.push(new Particle(
+                        this.x + Math.cos(angle) * 15,
+                        this.y + Math.sin(angle) * 15,
+                        Math.cos(angle) * 2 + (Math.random() - 0.5),
+                        Math.sin(angle) * 2 + (Math.random() - 0.5),
+                        '#ff4400',
+                        8
+                    ));
+                }
+            }
+            
+            takeDamage(damage, projectileAngle = null) {
+                this.health -= damage;
+                playSound('enemy-hit');
+                
+                // NEW: Hit flash effect
+                this.hitFlash = 3;
+                
+                // NEW: Knockback from projectile
+                if (projectileAngle !== null) {
+                    const knockbackForce = 8;
+                    this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
+                    this.knockbackY = Math.sin(projectileAngle) * knockbackForce;
+                }
+                
+                // Damage particles
+                for (let i = 0; i < 8; i++) {
+                    particles.push(new Particle(
+                        this.x + (Math.random() - 0.5) * 30,
+                        this.y + (Math.random() - 0.5) * 30,
+                        (Math.random() - 0.5) * 4,
+                        (Math.random() - 0.5) * 4,
+                        '#ffaa00',
+                        15
+                    ));
+                }
+                
+                return this.health <= 0;
+            }
+            
+            draw() {
+                ctx.save();
+                
+                // Subtle drop shadow below character
+                ctx.fillStyle = 'rgba(0,0,0,0.1)';
+                ctx.beginPath();
+                ctx.ellipse(this.x, this.y + this.size * 0.8, this.size * 0.35, this.size * 0.09, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // NEW: Hit flash effect
+                if (this.hitFlash > 0) {
+                    ctx.filter = 'brightness(3)';
+                }
+                
+                // Draw sprite using sprite sheet
+                const enemySpriteSheet = sprites.enemySheets[this.spriteId];
+                
+                // Tier 4 and 5 enemies are bigger
+                const sizeMultiplier = this.tier === 5 ? 1.6 : this.tier === 4 ? 1.3 : 1;
+                const drawSize = this.size * sizeMultiplier;
+                
+                // Use the drawSprite helper function
+                if (!drawSprite(enemySpriteSheet, this.currentDirection, 'walk', this.animFrame, this.x, this.y, drawSize)) {
+                    // Ultimate fallback circle
+                    ctx.fillStyle = '#ff4400';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size * 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        // Projectile class (for enemy projectiles)
+        class Projectile {
+            constructor(x, y, angle, speed, damage, color, isEnemy = false) {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.damage = damage;
+                this.color = color;
+                this.isEnemy = isEnemy;
+                this.life = 120;
+                this.animFrame = 0;
+                this.animTime = 0;
+                this.bounce = 0;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.animTime++;
+                if (this.animTime % 10 === 0) {
+                    this.animFrame = (this.animFrame + 1) % 6;
+                }
+                this.bounce += 0.3; // Bobbing motion
+                
+                return this.life <= 0 || 
+                       this.x < 0 || this.x > canvas.width ||
+                       this.y < 0 || this.y > canvas.height;
+            }
+            
+            draw() {
+                ctx.save();
+                
+                if (this.isEnemy && sprites.flameWalk && sprites.flameWalk.length > 0) {
+                    // Add glow for enemy projectiles
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = '#ff4400';
+                    
+                    // Draw animated flame sprite for enemy projectiles (no rotation)
+                    const frame = sprites.flameWalk[this.animFrame % sprites.flameWalk.length] || sprites.flame;
+                    ctx.translate(this.x, this.y + Math.sin(this.bounce) * 2);
+                    ctx.drawImage(frame, -9, -9, 18, 18);
+                } else {
+                    // This shouldn't be used for player projectiles anymore (using LaserBeam instead)
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x - this.vx * 3, this.y - this.vy * 3);
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        // LaserBeam class (for hero eye lasers using sprite)
+        class LaserBeam {
+            constructor(x, y, angle, speed, damage, color, offsetY = 0) {
+                this.x = x;
+                this.y = y + offsetY;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.angle = angle + Math.PI;
+                this.damage = damage;
+                this.color = color;
+                this.life = 120;
+                this.age = 0; // Track age for grow-in effect
+                this.startX = this.x;
+                this.startY = this.y;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.age++;
+                
+                // No paint trail — color is earned through kills
+                
+                return this.life <= 0 || 
+                       this.x < 0 || this.x > canvas.width ||
+                       this.y < 0 || this.y > canvas.height;
+            }
+            
+            draw() {
+                ctx.save();
+                
+                // Cyclops-style red beam — big, bold, unmistakable
+                const growProgress = Math.min(1, this.age / 4);
+                const scale = 0.3 + growProgress * 0.7;
+                const width = 25 * scale;
+                const height = 3 * scale;
+                
+                // Red glow
+                ctx.shadowBlur = 8 * scale;
+                ctx.shadowColor = '#ff0000';
+                
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                // Scattered white pixels around beam for visibility
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                for (let p = 0; p < 6; p++) {
+                    const px = (Math.random() - 0.5) * width;
+                    const py = (Math.random() - 0.5) * height * 6;
+                    const ps = 1 + Math.random() * 2;
+                    ctx.fillRect(px - ps/2, py - ps/2, ps, ps);
+                }
+
+                // Always draw red beam (ignore sprite)
+                {
+                    // White border to make beam pop on any background
+                    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                    ctx.lineWidth = height * 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(-width / 2, 0);
+                    ctx.lineTo(width / 2, 0);
+                    ctx.stroke();
+                    // Outer red glow
+                    ctx.strokeStyle = 'rgba(255,0,0,0.4)';
+                    ctx.lineWidth = height * 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(-width / 2, 0);
+                    ctx.lineTo(width / 2, 0);
+                    ctx.stroke();
+                    // Core beam
+                    ctx.strokeStyle = '#ff2200';
+                    ctx.lineWidth = height * 0.7;
+                    ctx.beginPath();
+                    ctx.moveTo(-width / 2, 0);
+                    ctx.lineTo(width / 2, 0);
+                    ctx.stroke();
+                    // Hot center
+                    ctx.strokeStyle = '#ff8866';
+                    ctx.lineWidth = height * 0.25;
+                    ctx.beginPath();
+                    ctx.moveTo(-width / 2, 0);
+                    ctx.lineTo(width / 2, 0);
+                    ctx.stroke();
+                }
+                
+                ctx.shadowBlur = 0;
+                
+                ctx.restore();
+            }
+        }
+        
+        // Power-up class
+        class PowerUp {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.bounce = 0;
+                this.life = 600; // 10 seconds at 60fps
+            }
+            
+            update() {
+                this.bounce += 0.1;
+                this.life--;
+                
+                // Check collision with player
+                const dx = this.x - player.x;
+                const dy = this.y - player.y;
+                if (dx * dx + dy * dy < 40 * 40) {
+                    this.collect();
+                    return true;
+                }
+                
+                return this.life <= 0;
+            }
+            
+            collect() {
+                const powerUp = powerUpTypes.find(p => p.type === this.type);
+                
+                // Lazy-load the power-up bird sprite sheet for hero swap
+                loadPowerUpBird(this.type);
+                
+                switch (this.type) {
+                    case 'chromie':
+                        // Instant: Expanding circle wave kills all enemies
+                        playSound('chromie-shockwave');
+                        this.createChromieWave();
+                        break;
+                    case 'crown':
+                        // Instant: +500 score with combo multiplier
+                        playSound('crown-collect');
+                        const crownPoints = 500 * comboMultiplier * (playerBuffs.diamond > 0 ? 2 : 1);
+                        score += crownPoints;
+                        
+                        // NEW: Add floating text for crown pickup
+                        let crownText = "+500";
+                        if (comboMultiplier > 1) {
+                            crownText += ` x${comboMultiplier}`;
+                        }
+                        if (playerBuffs.diamond > 0) {
+                            crownText += ` x2`;
+                        }
+                        floatingTexts.push(new FloatingText(this.x, this.y, crownText, '#ffd700'));
+                        
+                        this.createCrownBurst();
+                        break;
+                    case 'diamond':
+                        // Double points for 15s
+                        playSound('powerup-collect');
+                        playerBuffs.diamond = powerUp.duration;
+                        break;
+                    case 'duck':
+                        // Cosmetic duck noises for 10s
+                        playSound('duck-quack');
+                        playerBuffs.duck = powerUp.duration;
+                        break;
+                    case 'skully':
+                        // Death touch for 10s
+                        playSound('skully-activate');
+                        playerBuffs.skully = powerUp.duration;
+                        break;
+                    case 'halo':
+                        // Immunity for 8s
+                        playSound('halo-activate');
+                        playerBuffs.halo = powerUp.duration;
+                        break;
+                    case 'raincloud':
+                        // Slow enemies for 10s
+                        playSound('raincloud-activate');
+                        playerBuffs.raincloud = powerUp.duration;
+                        break;
+                    case 'flame':
+                        // Damage boost for 10s
+                        playSound('flame-activate');
+                        playerBuffs.flame = powerUp.duration;
+                        break;
+                }
+                
+                // Collection particles
+                for (let i = 0; i < 15; i++) {
+                    particles.push(new Particle(
+                        this.x + (Math.random() - 0.5) * 30,
+                        this.y + (Math.random() - 0.5) * 30,
+                        (Math.random() - 0.5) * 4,
+                        (Math.random() - 0.5) * 4,
+                        powerUp.color,
+                        25,
+                        3
+                    ));
+                }
+            }
+            
+            createChromieWave() {
+                // Create expanding colorful circle wave that kills all enemies
+                const wave = {
+                    x: player.x,
+                    y: player.y,
+                    radius: 0,
+                    maxRadius: Math.max(canvas.width, canvas.height),
+                    speed: 8,
+                    colors: ['#ff00ff', '#ff4400', '#ffff00', '#00ff00', '#00ffff', '#0044ff'],
+                    colorIndex: 0
+                };
+                
+                // Create expanding wave effect
+                const expandWave = () => {
+                    if (wave.radius < wave.maxRadius) {
+                        wave.radius += wave.speed;
+                        wave.colorIndex = (wave.colorIndex + 0.2) % wave.colors.length;
+                        
+                        // Check collision with enemies
+                        enemies.forEach((enemy, index) => {
+                            const dx = enemy.x - wave.x;
+                            const dy = enemy.y - wave.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (dist <= wave.radius && dist >= wave.radius - wave.speed) {
+                                // Kill enemy - tier-based scoring
+                                let basePoints = 100; // Tier 1 default
+                                if (enemy.tier === 2) basePoints = 200;
+                                else if (enemy.tier === 3) basePoints = 300;
+                                else if (enemy.tier === 4) basePoints = 500;
+                                else if (enemy.tier === 5) basePoints = 1000;
+                                
+                                const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
+                                score += points;
+                                
+                                // Colorful pixel death explosion
+                                if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                                
+                                playSound('enemy-death');
+                                playSound('kill-sound');
+                                enemies.splice(index, 1);
+                            }
+                        });
+                        
+                        // Draw the wave
+                        ctx.save();
+                        ctx.strokeStyle = wave.colors[Math.floor(wave.colorIndex)];
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.restore();
+                        
+                        requestAnimationFrame(expandWave);
+                    }
+                };
+                expandWave();
+            }
+            
+            createCrownBurst() {
+                // Create big gold particle burst for score reward
+                for (let i = 0; i < 30; i++) {
+                    particles.push(new Particle(
+                        player.x + (Math.random() - 0.5) * 60,
+                        player.y + (Math.random() - 0.5) * 60,
+                        (Math.random() - 0.5) * 8,
+                        (Math.random() - 0.5) * 8,
+                        '#ffd700',
+                        40,
+                        4
+                    ));
+                }
+            }
+            
+            draw() {
+                const powerUp = powerUpTypes.find(p => p.type === this.type);
+                
+                ctx.save();
+                
+                // Pulsing effect
+                const pulse = Math.sin(this.bounce * 2) * 0.3 + 0.7;
+                ctx.globalAlpha = pulse;
+                
+                // Special handling for flame power-up - use animated walk cycle
+                if (this.type === 'flame' && sprites.flameWalk && sprites.flameWalk.length > 0) {
+                    const frameIndex = Math.floor(this.bounce * 0.5) % sprites.flameWalk.length;
+                    const frameSprite = sprites.flameWalk[frameIndex];
+                    if (frameSprite) {
+                        ctx.drawImage(
+                            frameSprite,
+                            this.x - 20,
+                            this.y - 20 + Math.sin(this.bounce) * 3,
+                            40,
+                            40
+                        );
+                    }
+                } else {
+                    // Draw cropped sprite icon if available
+                    const spriteIcon = sprites.powerUps[this.type];
+                    if (spriteIcon) {
+                        // Draw the cropped sprite with bounce animation
+                        ctx.drawImage(
+                            spriteIcon,
+                            this.x - 20,
+                            this.y - 20 + Math.sin(this.bounce) * 3,
+                            40,
+                            40
+                        );
+                    } else {
+                        // Ultimate fallback - draw a colored circle
+                        ctx.fillStyle = powerUp.color;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y + Math.sin(this.bounce) * 3, 16, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        // Helper function for outlined text
+        function drawOutlinedText(text, x, y, fillColor, outlineColor, font) {
+            ctx.font = font || ctx.font;
+            ctx.textAlign = 'center';
+            ctx.strokeStyle = outlineColor || '#000000';
+            ctx.lineWidth = 3;
+            ctx.strokeText(text, x, y);
+            ctx.fillStyle = fillColor;
+            ctx.fillText(text, x, y);
+        }
+        
+        // Initialize stars for background
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 80; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2,
+                    twinkle: Math.random() * 100
+                });
+            }
+        }
+        
+        // Continuous enemy spawning
+        function spawnSingleEnemy() {
+            // Don't spawn if we're at max capacity
+            if (enemies.length >= maxEnemiesOnScreen) {
+                return;
+            }
+            
+            let x, y;
+            const side = Math.floor(Math.random() * 4);
+            
+            switch (side) {
+                case 0: // Top
+                    x = Math.random() * canvas.width;
+                    y = -50;
+                    break;
+                case 1: // Right
+                    x = canvas.width + 50;
+                    y = Math.random() * canvas.height;
+                    break;
+                case 2: // Bottom
+                    x = Math.random() * canvas.width;
+                    y = canvas.height + 50;
+                    break;
+                case 3: // Left
+                    x = -50;
+                    y = Math.random() * canvas.height;
+                    break;
+            }
+            
+            enemies.push(new Enemy(x, y));
+            
+            // Spawn delay: 1-2 seconds
+            nextSpawnDelay = 500 + Math.random() * 600;
+            lastEnemySpawnTime = Date.now();
+        }
+        
+        // Update game logic
+        function update() {
+            // Capture art on first frame of gameOver
+            if (gameState === 'gameOver' && !capturedArt) {
+                captureArt();
+            }
+            if (gameState !== 'playing' && gameState !== 'dying') return;
+            if (gameState === 'dying') {
+                // Only update drift pixels during death sequence
+                dyingDriftPixels = dyingDriftPixels.filter(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    const d = p.decay || 0.98;
+                    p.vx *= d;
+                    p.vy *= d;
+                    p.life--;
+                    if (p.life > 0) {
+                        // Main pixel in its committed color
+                        const t = new FireTrail(p.x, p.y);
+                        t.size = p.size;
+                        t.color = p.color;
+                        fireTrails.push(t);
+                        // 30% chance: tiny speck of a DIFFERENT color nearby
+                        if (Math.random() < 0.3) {
+                            const st = new FireTrail(
+                                p.x + (Math.random()-0.5) * 10,
+                                p.y + (Math.random()-0.5) * 10
+                            );
+                            st.size = 0.5 + Math.random() * 0.8;
+                            st.color = pixelColors[Math.floor(Math.random() * pixelColors.length)];
+                            fireTrails.push(st);
+                        }
+                    }
+                    return p.life > 0;
+                });
+                return;
+            }
+            
+            // NEW: Kill slowmo effect
+            if (slowMoFrames > 0) {
+                slowMoFrames--;
+                if (slowMoFrames % 2 === 1) {
+                    // Skip every other update frame during slowmo
+                    return;
+                }
+            }
+            
+            // NEW: Update game time and progressive difficulty
+            gameTime = (Date.now() - gameStartTime) / 1000;
+            
+            // Every 15 seconds: decrease spawn delay (min 400ms)
+            if (Math.floor(gameTime / 15) > Math.floor((gameTime - 0.016) / 15)) {
+                nextSpawnDelay = Math.max(400, nextSpawnDelay - 150);
+            }
+            
+            // Every 20 seconds: increase enemy speed
+            if (Math.floor(gameTime / 20) > Math.floor((gameTime - 0.016) / 20)) {
+                enemySpeedMultiplier += 0.08;
+                playerSpeedBonus += 0.03;
+            }
+            
+            // Every 30 seconds: increase max enemies (cap at 30)
+            if (Math.floor(gameTime / 30) > Math.floor((gameTime - 0.016) / 30)) {
+                maxEnemiesOnScreen = Math.min(30, maxEnemiesOnScreen + 2);
+            }
+            
+            // NEW: Update combo system
+            if (comboCount > 0 && Date.now() - lastKillTime > 2000) {
+                // Combo expired - reset
+                comboCount = 0;
+                comboMultiplier = 1;
+                comboDisplay.active = false;
+            }
+            
+            // NEW: Update floating texts
+            floatingTexts = floatingTexts.filter(text => !text.update());
+            
+            // NEW: Update streak callouts
+            streakCallouts = streakCallouts.filter(callout => !callout.update());
+            
+            // NEW: Update combo display
+            if (comboDisplay.active) {
+                if (comboDisplay.pulseTime > 0) {
+                    comboDisplay.pulseTime--;
+                    comboDisplay.scale = 1.0 + Math.sin(comboDisplay.pulseTime * 0.5) * 0.3;
+                } else {
+                    comboDisplay.scale = 1.0;
+                }
+            }
+            
+            // Wave-based spawning with breathing room
+            const currentTime = Date.now();
+            const waveLength = 30; // seconds per wave
+            const pauseLength = 4; // seconds pause between waves
+            const cycleTime = gameTime % (waveLength + pauseLength);
+            const inPause = cycleTime >= waveLength;
+            
+            if (!inPause && currentTime - lastEnemySpawnTime >= nextSpawnDelay) {
+                spawnSingleEnemy();
+            }
+            
+            // Update player
+            player.update();
+            
+            // Rainbow tracer — tight line trail behind player (not spray)
+            if (rainbowActive) {
+                rainbowTimer--;
+                rainbowHue = (rainbowHue + 4) % 360;
+                // Drop thick line trail directly behind player
+                for (let i = 0; i < 3; i++) {
+                    const t = new FireTrail(player.x, player.y);
+                    t.x = player.x + (Math.random() - 0.5) * 8;
+                    t.y = player.y + (Math.random() - 0.5) * 8;
+                    t.size = 3 + Math.random() * 2.5; // Wider pixels
+                    t.color = `hsl(${(rainbowHue + i * 20) % 360}, 100%, 55%)`;
+                    fireTrails.push(t);
+                }
+                if (rainbowTimer <= 0) rainbowActive = false;
+            }
+            
+            // Chrome drop spawning — every ~15 seconds
+            const now = Date.now();
+            if (now - lastChromeDrop > 15000 && !rainbowActive) {
+                lastChromeDrop = now;
+                chromeDrops.push({
+                    x: 50 + Math.random() * (canvas.width - 100),
+                    y: 50 + Math.random() * (canvas.height - 100),
+                    size: 18,
+                    hue: 0,
+                    born: now
+                });
+            }
+            
+            // Update chrome drops — check pickup + animate
+            for (let i = chromeDrops.length - 1; i >= 0; i--) {
+                const drop = chromeDrops[i];
+                drop.hue = (drop.hue + 3) % 360;
+                // Despawn after 10 seconds
+                if (now - drop.born > 10000) { chromeDrops.splice(i, 1); continue; }
+                // Check player pickup
+                const dx = player.x - drop.x, dy = player.y - drop.y;
+                if (Math.sqrt(dx*dx + dy*dy) < player.size + drop.size) {
+                    rainbowActive = true;
+                    rainbowTimer = RAINBOW_DURATION;
+                    rainbowHue = 0;
+                    chromeDrops.splice(i, 1);
+                }
+            }
+            
+            // Update enemies
+            enemies.forEach(enemy => enemy.update());
+            
+            // Update projectiles
+            projectiles = projectiles.filter(proj => !proj.update());
+            
+            // Update particles
+            particles = particles.filter(particle => {
+                particle.update();
+                return particle.life > 0;
+            });
+            
+            // Trails are permanent art — no damage from them
+            
+            // Collision detection - player projectiles vs enemies
+            projectiles.forEach((proj, pIndex) => {
+                enemies.forEach((enemy, eIndex) => {
+                    const dx = proj.x - enemy.x;
+                    const dy = proj.y - enemy.y;
+                    if (dx * dx + dy * dy < (enemy.size * enemy.size)) {
+                        // NEW: Pass projectile angle for knockback
+                        const projAngle = Math.atan2(proj.vy, proj.vx);
+                        if (enemy.takeDamage(proj.damage, projAngle)) {
+                            // Enemy killed - tier-based scoring
+                            let basePoints = 100; // Tier 1 default
+                            if (enemy.tier === 2) basePoints = 200;
+                            else if (enemy.tier === 3) basePoints = 300;
+                            else if (enemy.tier === 4) basePoints = 500;
+                            else if (enemy.tier === 5) basePoints = 1000;
+                            
+                            // NEW: Apply combo multiplier
+                            const points = basePoints * comboMultiplier * (playerBuffs.diamond > 0 ? 2 : 1);
+                            score += points;
+                            
+                            // NEW: Update combo system
+                            comboCount++;
+                            lastKillTime = Date.now();
+                            comboMultiplier = Math.min(comboCount, 8);
+                            
+                            // NEW: Update combo display
+                            if (comboMultiplier > 1) {
+                                comboDisplay.active = true;
+                                comboDisplay.text = `x${comboMultiplier}`;
+                                comboDisplay.pulseTime = 20; // Pulse for 20 frames
+                                comboDisplay.alpha = 1;
+                            }
+                            
+                            // NEW: Add floating score text
+                            let floatingText = `+${basePoints}`;
+                            if (comboMultiplier > 1) {
+                                floatingText += ` x${comboMultiplier}`;
+                            }
+                            if (playerBuffs.diamond > 0 && comboMultiplier > 1) {
+                                floatingText += ` x2`; // Show both multipliers
+                            } else if (playerBuffs.diamond > 0) {
+                                floatingText += ` x2`;
+                            }
+                            floatingTexts.push(new FloatingText(enemy.x, enemy.y, floatingText));
+                            
+                            // NEW: Update kill counter and streak
+                            kills++;
+                            killStreak++;
+                            
+                            // NEW: Check for streak callouts
+                            if (killStreak === 5) {
+                                playSound('rampage-stinger');
+                                streakCallouts.push(new StreakCallout("RAMPAGE", "#ff4400"));
+                            } else if (killStreak === 10) {
+                                playSound('unstoppable-stinger');
+                                streakCallouts.push(new StreakCallout("UNSTOPPABLE", "#ff00ff"));
+                            } else if (killStreak === 15) {
+                                playSound('godlike-stinger');
+                                streakCallouts.push(new StreakCallout("GODLIKE", "#ffd700"));
+                            } else if (killStreak === 20) {
+                                playSound('legendary-stinger');
+                                streakCallouts.push(new StreakCallout("LEGENDARY", "#00ffff"));
+                            }
+                            
+                            // NEW: Kill slowmo for Tier 3+ enemies
+                            if (enemy.tier >= 3) {
+                                slowMoFrames = 4;
+                            }
+                            
+                            // Colorful pixel death explosion
+                            if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                            
+                            // Power-up drops disabled for now
+                            
+                            playSound('enemy-death');
+                            playSound('kill-sound');
+                            enemies.splice(eIndex, 1);
+                        }
+                        projectiles.splice(pIndex, 1);
+                    }
+                });
+            });
+            
+            // Collision detection - enemies vs player
+            enemies.forEach((enemy, index) => {
+                const dx = enemy.x - player.x;
+                const dy = enemy.y - player.y;
+                const distSq = dx * dx + dy * dy;
+                const collisionDist = (enemy.size * 0.6 + player.size * 0.6) * (enemy.size * 0.6 + player.size * 0.6);
+                
+                if (distSq < collisionDist) {
+                    // Skully power-up: death touch - enemy dies instantly when touched
+                    if (playerBuffs.skully > 0) {
+                        // Tier-based scoring for skully kills
+                        let basePoints = 100; // Tier 1 default
+                        if (enemy.tier === 2) basePoints = 200;
+                        else if (enemy.tier === 3) basePoints = 300;
+                        else if (enemy.tier === 4) basePoints = 500;
+                        else if (enemy.tier === 5) basePoints = 1000;
+                        
+                        // NEW: Apply combo multiplier
+                        const points = basePoints * comboMultiplier * (playerBuffs.diamond > 0 ? 2 : 1);
+                        score += points;
+                        
+                        // NEW: Update combo system
+                        comboCount++;
+                        lastKillTime = Date.now();
+                        comboMultiplier = Math.min(comboCount, 8);
+                        
+                        // NEW: Update combo display
+                        if (comboMultiplier > 1) {
+                            comboDisplay.active = true;
+                            comboDisplay.text = `x${comboMultiplier}`;
+                            comboDisplay.pulseTime = 20;
+                            comboDisplay.alpha = 1;
+                        }
+                        
+                        // NEW: Add floating score text
+                        let floatingText = `+${basePoints}`;
+                        if (comboMultiplier > 1) {
+                            floatingText += ` x${comboMultiplier}`;
+                        }
+                        if (playerBuffs.diamond > 0 && comboMultiplier > 1) {
+                            floatingText += ` x2`;
+                        } else if (playerBuffs.diamond > 0) {
+                            floatingText += ` x2`;
+                        }
+                        floatingTexts.push(new FloatingText(enemy.x, enemy.y, floatingText));
+                        
+                        // NEW: Update kill counter and streak
+                        kills++;
+                        killStreak++;
+                        
+                        // NEW: Check for streak callouts
+                        if (killStreak === 5) {
+                            playSound('rampage-stinger');
+                            streakCallouts.push(new StreakCallout("RAMPAGE", "#ff4400"));
+                        } else if (killStreak === 10) {
+                            playSound('unstoppable-stinger');
+                            streakCallouts.push(new StreakCallout("UNSTOPPABLE", "#ff00ff"));
+                        } else if (killStreak === 15) {
+                            playSound('godlike-stinger');
+                            streakCallouts.push(new StreakCallout("GODLIKE", "#ffd700"));
+                        } else if (killStreak === 20) {
+                            playSound('legendary-stinger');
+                            streakCallouts.push(new StreakCallout("LEGENDARY", "#00ffff"));
+                        }
+                        
+                        // NEW: Kill slowmo for Tier 3+ enemies
+                        if (enemy.tier >= 3) {
+                            slowMoFrames = 4;
+                        }
+                        
+                        // Colorful pixel death explosion
+                        if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                        
+                        playSound('enemy-death');
+                        playSound('kill-sound');
+                        enemies.splice(index, 1);
+                    } else {
+                        // Normal collision - player takes damage
+                        playSound('player-hit');
+                        player.takeDamage();
+                        // Push enemy away
+                        const length = Math.sqrt(distSq);
+                        if (length > 0) {
+                            enemy.x -= (dx / length) * 30;
+                            enemy.y -= (dy / length) * 30;
+                        }
+                    }
+                }
+            });
+            
+            // Check death — trigger the death sequence
+            if (player.health <= 0 && gameState === 'playing') {
+                gameState = 'dying';
+                dyingStartTime = Date.now();
+                dyingEnemiesExploded = false;
+                dyingDriftPixels = [];
+                screenShake = 0;
+                stopMusic();
+                playSound('player-death');
+                
+                // Massive player death — directional spray burst
+                // Dense core splat
+                for (let i = 0; i < 200; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = Math.random() * 60;
+                    const t = new FireTrail(player.x + Math.cos(angle) * dist, player.y + Math.sin(angle) * dist);
+                    t.size = 3 + Math.random() * 4;
+                    fireTrails.push(t);
+                }
+                // 8-12 directional spray fingers radiating outward
+                const numSprays = 8 + Math.floor(Math.random() * 5);
+                for (let s = 0; s < numSprays; s++) {
+                    const sprayAngle = (s / numSprays) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+                    const sprayLen = 80 + Math.random() * 140;
+                    const sprayWidth = 4 + Math.random() * 8;
+                    for (let j = 0; j < 30; j++) {
+                        const along = 30 + Math.random() * sprayLen;
+                        const across = (Math.random() - 0.5) * sprayWidth;
+                        const px = player.x + Math.cos(sprayAngle) * along + Math.cos(sprayAngle + Math.PI/2) * across;
+                        const py = player.y + Math.sin(sprayAngle) * along + Math.sin(sprayAngle + Math.PI/2) * across;
+                        const t = new FireTrail(px, py);
+                        t.size = 1 + Math.random() * 2.5 * (1 - along / (sprayLen + 80));
+                        fireTrails.push(t);
+                    }
+                }
+                // Outer scattered droplets
+                for (let i = 0; i < 60; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 100 + Math.random() * 80;
+                    const t = new FireTrail(player.x + Math.cos(angle) * dist, player.y + Math.sin(angle) * dist);
+                    t.size = 0.5 + Math.random() * 1.5;
+                    fireTrails.push(t);
+                }
+                
+                // Schedule all enemies to chain-explode
+                const enemyCopy = [...enemies];
+                enemyCopy.forEach((enemy, idx) => {
+                    setTimeout(() => {
+                        if (gameState !== 'dying') return;
+                        spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                        if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
+                        playSound('enemy-death');
+                        // Paint fling — each pixel picks ONE bold color and commits
+                        // Mix of thick slow globs + fast thin streaks
+                        for (let i = 0; i < 70; i++) {
+                            const a = Math.random() * Math.PI * 2;
+                            const isGlob = Math.random() < 0.25; // 25% thick slow globs
+                            const isStreak = !isGlob && Math.random() < 0.35; // ~26% fast thin streaks
+                            // rest are medium
+                            const spd = isGlob ? (0.8 + Math.random() * 1.5) :
+                                         isStreak ? (3 + Math.random() * 5) :
+                                         (1.5 + Math.random() * 3);
+                            const sz = isGlob ? (3 + Math.random() * 4) :
+                                       isStreak ? (0.8 + Math.random() * 1.2) :
+                                       (1.5 + Math.random() * 2.5);
+                            const decay = isGlob ? 0.96 : isStreak ? 0.995 : 0.98;
+                            const life = isGlob ? (80 + Math.random() * 60) :
+                                         isStreak ? (250 + Math.random() * 150) :
+                                         (150 + Math.random() * 100);
+                            dyingDriftPixels.push({
+                                x: enemy.x + (Math.random()-0.5)*15,
+                                y: enemy.y + (Math.random()-0.5)*15,
+                                vx: Math.cos(a) * spd,
+                                vy: Math.sin(a) * spd,
+                                size: sz,
+                                decay: decay,
+                                color: pixelColors[Math.floor(Math.random() * pixelColors.length)],
+                                life: life,
+                                shifting: false
+                            });
+                        }
+                    }, 80 + idx * 100); // stagger explosions ~100ms apart
+                });
+                
+                // After all explosions + drift, transition to gameOver
+                const totalDeathTime = Math.max(3500, 80 + enemyCopy.length * 100 + 1500);
+                setTimeout(() => {
+                    if (gameState !== 'dying') return;
+                    gameState = 'gameOver';
+                    gameOverTime = Date.now();
+                    finalKills = kills;
+                    playSound('game-over');
+                }, totalDeathTime);
+            }
+            
+            // Clear enemies during death sequence (they explode via setTimeout)
+            if (gameState === 'dying') {
+                enemies = [];
+            }
+
+            // Capture art when entering gameOver (after death sequence)
+        function captureArt() {
+                const artScale = 2;
+                const artCanvas = document.createElement('canvas');
+                artCanvas.width = canvas.width * artScale;
+                artCanvas.height = canvas.height * artScale;
+                const artCtx = artCanvas.getContext('2d');
+                artCtx.fillStyle = '#ffffff';
+                artCtx.fillRect(0, 0, artCanvas.width, artCanvas.height);
+                if (paintCanvas) {
+                    artCtx.imageSmoothingEnabled = false;
+                    artCtx.drawImage(paintCanvas, 0, 0, artCanvas.width, artCanvas.height);
+                    artCtx.imageSmoothingEnabled = true;
+                }
+                fireTrails.forEach(trail => {
+                    artCtx.fillStyle = trail.color;
+                    const sx = trail.x * artScale;
+                    const sy = trail.y * artScale;
+                    const ss = trail.size * artScale;
+                    artCtx.fillRect(sx - ss, sy - ss, ss * 2, ss * 2);
+                });
+                artCtx.save();
+                artCtx.font = `${Math.round(artCanvas.width * 0.018)}px monospace`;
+                artCtx.fillStyle = 'rgba(180,180,180,0.5)';
+                artCtx.textAlign = 'right';
+                artCtx.fillText('made with Death Paint', artCanvas.width - 12, artCanvas.height - 10);
+                artCtx.restore();
+                capturedArt = artCanvas;
+                
+                const sampleData = artCtx.getImageData(0, 0, artCanvas.width, artCanvas.height).data;
+                let coloredPixels = 0;
+                const totalSampled = artCanvas.width * artCanvas.height;
+                for (let i = 0; i < sampleData.length; i += 16) {
+                    const r = sampleData[i], g = sampleData[i+1], b = sampleData[i+2];
+                    if (r !== 255 || g !== 255 || b !== 255) coloredPixels++;
+                }
+                canvasCoverage = Math.round((coloredPixels / (totalSampled / 4)) * 100);
+
+                // Generate art title
+                if (!currentArtTitle) {
+                    currentArtTitle = artTitles[Math.floor(Math.random() * artTitles.length)] + Math.floor(Math.random() * 999);
+                }
+        }
+            
+            // Update screen shake
+            if (screenShake > 0) {
+                screenShake--;
+            }
+        }
+        
+        // Render game
+        function draw() {
+            // Screen shake
+            ctx.save();
+            if (screenShake > 0 && gameState === 'playing') {
+                ctx.translate(
+                    (Math.random() - 0.5) * screenShake,
+                    (Math.random() - 0.5) * screenShake
+                );
+            }
+            
+            // Clear screen with dark background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (gameState === 'menu') {
+                drawMenu();
+            } else if (gameState === 'playing') {
+                // Clean white background — no stars
+                
+                // Draw arena border (subtle)
+                ctx.save();
+                ctx.strokeStyle = '#ddd';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+                ctx.restore();
+                
+                // Draw game objects
+                // Draw order: trails (paint) → particles → lasers → enemies → player
+                // Draw accumulated paint bitmap first
+                if (paintCanvas) ctx.drawImage(paintCanvas, 0, 0);
+                // Draw this frame's new trails on top (same fillRect look)
+                fireTrails.forEach(trail => trail.draw());
+                // Bake new trails into bitmap and clear array
+                if (paintCtx && fireTrails.length > 0) {
+                    fireTrails.forEach(trail => {
+                        paintCtx.fillStyle = trail.color;
+                        paintCtx.fillRect(trail.x - trail.size, trail.y - trail.size, trail.size * 2, trail.size * 2);
+                    });
+                    fireTrails = [];
+                }
+                particles.forEach(particle => particle.draw());
+                projectiles.forEach(proj => proj.draw());
+                enemies.forEach(enemy => enemy.draw());
+                
+                // Draw chrome drops (squiggle icon)
+                chromeDrops.forEach(drop => {
+                    ctx.save();
+                    const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
+                    const sz = drop.size * 2 * pulse;
+                    // Rainbow glow behind icon
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = `hsl(${drop.hue}, 100%, 60%)`;
+                    if (sprites.chromieIcon && sprites.chromieIcon.complete) {
+                        ctx.drawImage(sprites.chromieIcon, drop.x - sz/2, drop.y - sz/2, sz, sz);
+                    } else {
+                        // Fallback circle
+                        ctx.beginPath();
+                        ctx.arc(drop.x, drop.y, drop.size * pulse, 0, Math.PI * 2);
+                        ctx.fillStyle = `hsl(${drop.hue}, 100%, 50%)`;
+                        ctx.fill();
+                    }
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                });
+                player.draw();
+                
+                // Aim indicator removed — lasers are the feedback
+                
+                // Draw UI
+                drawUI();
+                
+                // Combo display removed for clean art look
+                
+                // NEW: Draw streak callouts
+                // streakCallouts disabled for clean look
+                
+                // Kill counter removed for clean art look
+                
+                // Test mode indicator removed for polish
+                // if (testMode) {
+                //     ctx.fillStyle = '#ff4400';
+                //     ctx.font = 'bold 24px Arial';
+                //     ctx.textAlign = 'center';
+                //     ctx.fillText('TEST MODE', canvas.width / 2, 40);
+                // }
+                
+                // Draw split-screen zone indicators
+                drawZoneIndicators();
+            } else if (gameState === 'dying') {
+                // Keep showing the canvas with paint during death sequence
+                ctx.save();
+                ctx.strokeStyle = '#ddd';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+                ctx.restore();
+                
+                // Draw accumulated paint
+                if (paintCanvas) ctx.drawImage(paintCanvas, 0, 0);
+                fireTrails.forEach(trail => trail.draw());
+                // Bake trails
+                if (paintCtx && fireTrails.length > 0) {
+                    fireTrails.forEach(trail => {
+                        paintCtx.fillStyle = trail.color;
+                        paintCtx.fillRect(trail.x - trail.size, trail.y - trail.size, trail.size * 2, trail.size * 2);
+                    });
+                    fireTrails = [];
+                }
+                
+                // Draw drifting pixels
+                dyingDriftPixels.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
+                });
+                
+                // Slow fade to white as death sequence progresses
+                const dyingElapsed = (Date.now() - dyingStartTime) / 1000;
+                const fadeAlpha = Math.max(0, (dyingElapsed - 1.5) * 0.3); // start fading at 1.5s
+                if (fadeAlpha > 0) {
+                    ctx.fillStyle = `rgba(255,255,255,${Math.min(0.6, fadeAlpha)})`;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            } else if (gameState === 'gameOver') {
+                drawGameOver();
+            }
+            
+            ctx.restore();
+        }
+        
+        // Draw menu screen
+        // ===== DEATH PAINT TITLE SCREEN =====
+        const titleImg = new Image();
+        titleImg.src = 'death-paint-title.jpg';
+
+        function drawMenu() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (titleImg.complete && titleImg.naturalWidth) {
+                // Scale image to fit width, centered at top
+                const scale = canvas.width * 0.85 / titleImg.naturalWidth;
+                const iw = titleImg.naturalWidth * scale;
+                const ih = titleImg.naturalHeight * scale;
+                const ix = (canvas.width - iw) / 2;
+                const iy = canvas.height * 0.08;
+                ctx.drawImage(titleImg, ix, iy, iw, ih);
+            }
+
+            // Pulsing "TAP TO PLAY"
+            const pulse = (Math.sin(Date.now() * 0.004) + 1) * 0.5;
+            ctx.globalAlpha = 0.3 + pulse * 0.7;
+            const fontSize = Math.max(16, Math.floor(canvas.width / 22));
+            ctx.font = `bold ${fontSize}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#222222';
+            ctx.fillText('TAP TO PLAY', canvas.width / 2, canvas.height * 0.78);
+            ctx.globalAlpha = 1;
+        }
+        
+        // Draw game over screen
+        const artTitles = [
+            "Untitled #", "Composition ", "Study in Chaos ", "Splatter No. ",
+            "Chromatic Burst ", "Abstract #", "Pixel Symphony ", "Canvas ",
+            "Moonbird Opus ", "Digital Jackson ", "Fragments ", "Drift "
+        ];
+        let currentArtTitle = '';
+        let currentDeathMessage = '';
+        let capturedArt = null;
+        let canvasCoverage = 0;
+        let finalKills = 0;
+        let gameOverTime = 0;
+        let saveButtonY = 0;
+        let saveButtonRect = null;
+        
+        function saveArtwork() {
+            if (!capturedArt) return;
+            capturedArt.toBlob(async blob => {
+                const file = new File([blob], (currentArtTitle || 'moonbird-art').replace(/[^a-zA-Z0-9 #]/g, '') + '.png', { type: 'image/png' });
+                // Try Web Share API first (iOS saves to camera roll via share sheet)
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({ files: [file] });
+                        return;
+                    } catch(e) { /* user cancelled or failed, fall through */ }
+                }
+                // Fallback: download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        }
+        
+        function drawGameOver() {
+            // Fade in timing
+            const elapsed = (Date.now() - gameOverTime) / 1000;
+            const fadeIn = Math.min(1, elapsed / 1.5); // 1.5s fade in
+            
+            // Soft white background fade
+            ctx.fillStyle = `rgba(245,243,240,${fadeIn * 0.92})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (fadeIn < 0.3) return; // Let it fade in before showing frame
+            
+            const contentAlpha = Math.min(1, (fadeIn - 0.3) / 0.7);
+            ctx.save();
+            ctx.globalAlpha = contentAlpha;
+            
+            // Artwork fills most of screen, info tucked at bottom
+            const margin = 12;
+            const frameX = margin;
+            const frameY = margin;
+            const frameW = canvas.width - margin * 2;
+            // Reserve space at bottom for info
+            const infoHeight = 180;
+            const frameH = canvas.height - infoHeight - margin;
+            
+            // Thin frame border
+            ctx.strokeStyle = '#2a2218';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(frameX - 2, frameY - 2, frameW + 4, frameH + 4);
+            
+            // The actual painting
+            if (capturedArt) {
+                ctx.drawImage(capturedArt, frameX, frameY, frameW, frameH);
+            }
+            
+            // --- Info at bottom with breathing room ---
+            const cx = canvas.width / 2;
+            const bottomY = frameY + frameH + 30;
+            ctx.textAlign = 'center';
+            
+            // Generate title once
+            if (!currentArtTitle) {
+                const base = artTitles[Math.floor(Math.random() * artTitles.length)];
+                currentArtTitle = base + Math.floor(Math.random() * 999);
+            }
+            
+            // Title
+            ctx.font = 'italic 17px Georgia, serif';
+            ctx.fillStyle = '#555555';
+            ctx.fillText(currentArtTitle, cx, bottomY);
+            
+            // Coverage — single line: "46% canvas covered"
+            ctx.font = 'bold 28px Arial';
+            ctx.fillStyle = '#111111';
+            ctx.fillText(`${canvasCoverage}% canvas covered`, cx, bottomY + 34);
+            
+            // Birds popped
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#888888';
+            ctx.fillText(`${finalKills} birds popped`, cx, bottomY + 56);
+            
+            // Save button
+            if (elapsed > 2) {
+                const btnY = bottomY + 72;
+                const btnW = 150, btnH = 36;
+                saveButtonRect = { x: cx - btnW / 2, y: btnY, w: btnW, h: btnH };
+                
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.roundRect(saveButtonRect.x, saveButtonRect.y, btnW, btnH, 8);
+                ctx.fill();
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('save to photos', cx, btnY + 23);
+            }
+            
+            // Tap to play again
+            if (elapsed > 4) {
+                const pulse = 0.4 + (Math.sin(Date.now() * 0.003) + 1) * 0.3;
+                ctx.globalAlpha = contentAlpha * pulse;
+                ctx.font = '13px Arial';
+                ctx.fillStyle = '#bbbbbb';
+                ctx.fillText('tap to paint again', cx, bottomY + 135);
+            }
+            
+            ctx.restore();
+        }
+        
+        // Draw UI — clean art mode, nothing to show
+        function drawUI() {}
+        
+        // Draw split-screen zone indicators
+        function drawZoneIndicators() {
+            // Only show on mobile screens and when playing
+            if (window.innerWidth > 768 || gameState !== 'playing') return;
+            
+            ctx.save();
+            
+            // Vertical divider line down the middle (very faint)
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            
+            // Zone labels (fade after 3 seconds)
+            if (zoneLabelsVisible > 0) {
+                zoneLabelsVisible--;
+                const alpha = Math.min(1, zoneLabelsVisible / 60); // Fade out over 1 second
+                
+                ctx.globalAlpha = alpha * 0.7;
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#cc9900';
+                
+                // "MOVE" label bottom-left
+                ctx.fillText('MOVE', canvas.width / 4, canvas.height - 20);
+                
+                // "SHOOT" label bottom-right
+                ctx.fillStyle = '#0088cc';
+                ctx.fillText('SHOOT', (canvas.width * 3) / 4, canvas.height - 20);
+                
+                ctx.globalAlpha = 1;
+            }
+            
+            ctx.restore();
+        }
+        
+        // Input event listeners
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ') e.preventDefault();
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+            mouse.lastMoveTime = Date.now(); // Track when mouse was last moved
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            mouse.down = true;
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+            handleClick();
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            mouse.down = false;
+        });
+        
+        // Split-screen dual-zone touch control system
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+        
+        function handleTouchStart(e) {
+            e.preventDefault();
+            initAudio();
+            if (gameState !== 'playing') {
+                // Handle menu/game over clicks
+                if (e.touches.length > 0) {
+                    const touch_event = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    mouse.x = touch_event.clientX - rect.left;
+                    mouse.y = touch_event.clientY - rect.top;
+                    handleClick();
+                }
+                return;
+            }
+            
+            // Show zone labels when first touching
+            if (zoneLabelsVisible === 0) {
+                zoneLabelsVisible = 180; // 3 seconds at 60fps
+            }
+            
+            const rect = canvas.getBoundingClientRect();
+            const centerX = canvas.width / 2;
+            
+            // Process each new touch
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+                
+                // Determine which zone this touch belongs to
+                if (touchX < centerX) {
+                    // Left zone (movement)
+                    if (!leftZone.active) {
+                        leftZone.active = true;
+                        leftZone.touchId = touch.identifier;
+                        leftZone.startX = touchX;
+                        leftZone.startY = touchY;
+                        leftZone.currentX = touchX;
+                        leftZone.currentY = touchY;
+                        leftZone.currentDirection = { x: 0, y: 0, angle: 0 };
+                    }
+                } else {
+                    // Right zone (shooting)
+                    if (!rightZone.active) {
+                        rightZone.active = true;
+                        rightZone.touchId = touch.identifier;
+                        rightZone.startX = touchX;
+                        rightZone.startY = touchY;
+                        rightZone.currentX = touchX;
+                        rightZone.currentY = touchY;
+                        rightZone.currentDirection = { x: 0, y: 0, angle: 0 };
+                    }
+                }
+            }
+        }
+        
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (gameState !== 'playing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            
+            // Process each moving touch
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+                
+                // Check if this touch belongs to left zone
+                if (leftZone.active && leftZone.touchId === touch.identifier) {
+                    leftZone.currentX = touchX;
+                    leftZone.currentY = touchY;
+                    
+                    // Calculate direction vector from start to current position
+                    const dx = leftZone.currentX - leftZone.startX;
+                    const dy = leftZone.currentY - leftZone.startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Apply dead zone
+                    if (distance > leftZone.deadZone) {
+                        const angle = Math.atan2(dy, dx);
+                        leftZone.currentDirection = {
+                            x: dx / distance,
+                            y: dy / distance,
+                            angle: angle
+                        };
+                    } else {
+                        leftZone.currentDirection = { x: 0, y: 0, angle: 0 };
+                    }
+                }
+                
+                // Check if this touch belongs to right zone
+                if (rightZone.active && rightZone.touchId === touch.identifier) {
+                    rightZone.currentX = touchX;
+                    rightZone.currentY = touchY;
+                    
+                    // Calculate direction vector from start to current position
+                    const dx = rightZone.currentX - rightZone.startX;
+                    const dy = rightZone.currentY - rightZone.startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Apply dead zone
+                    if (distance > rightZone.deadZone) {
+                        const angle = Math.atan2(dy, dx);
+                        rightZone.currentDirection = {
+                            x: dx / distance,
+                            y: dy / distance,
+                            angle: angle
+                        };
+                    } else {
+                        rightZone.currentDirection = { x: 0, y: 0, angle: 0 };
+                    }
+                }
+            }
+        }
+        
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            if (gameState !== 'playing') return;
+            
+            // Process each ended touch
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                
+                // Check if this touch belongs to left zone (movement)
+                if (leftZone.active && leftZone.touchId === touch.identifier) {
+                    leftZone.active = false;
+                    leftZone.touchId = null;
+                    leftZone.currentDirection = { x: 0, y: 0, angle: 0 };
+                }
+                
+                // Check if this touch belongs to right zone (shooting)
+                if (rightZone.active && rightZone.touchId === touch.identifier) {
+                    rightZone.active = false;
+                    rightZone.touchId = null;
+                    rightZone.currentDirection = { x: 0, y: 0, angle: 0 };
+                }
+            }
+        }
+        
+        function handleClick() {
+            try {
+                initAudio(); // Init AudioContext on first user gesture (mobile requirement)
+                if (gameState === 'menu') {
+                    playSound('menu-tap');
+                    startGame();
+                } else if (gameState === 'gameOver') {
+                    // Check save button first
+                    if (saveButtonRect) {
+                        const cx = mouse.x, cy = mouse.y;
+                        if (cx >= saveButtonRect.x && cx <= saveButtonRect.x + saveButtonRect.w &&
+                            cy >= saveButtonRect.y && cy <= saveButtonRect.y + saveButtonRect.h) {
+                            saveArtwork();
+                            return;
+                        }
+                    }
+                    if (Date.now() - gameOverTime < 4000) return; // Let them admire the art
+                    playSound('menu-tap');
+                    restartGame();
+                }
+            } catch(e) {
+                // Show error on canvas for mobile debugging
+                ctx.fillStyle = 'red';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText('ERROR: ' + e.message, 10, 50);
+                console.error('handleClick error:', e);
+            }
+        }
+        
+        function startGame() {
+            currentArtTitle = '';
+            currentDeathMessage = '';
+            capturedArt = null;
+            canvasCoverage = 0;
+            finalKills = 0;
+            saveButtonRect = null;
+            chromeDrops = [];
+            dyingDriftPixels = [];
+            dyingEnemiesExploded = false;
+            rainbowActive = false;
+            rainbowTimer = 0;
+            lastChromeDrop = Date.now();
+            gameState = 'playing';
+            startMusic();
+            score = 0;
+            lives = 3;
+            
+            // NEW: Reset juice variables
+            gameStartTime = Date.now();
+            gameTime = 0;
+            kills = 0;
+            killStreak = 0;
+            comboCount = 0;
+            lastKillTime = 0;
+            comboMultiplier = 1;
+            slowMoFrames = 0;
+            enemySpeedMultiplier = 1;
+            playerSpeedBonus = 0;
+            floatingTexts = [];
+            streakCallouts = [];
+            comboDisplay = { active: false, text: '', scale: 1, alpha: 1, pulseTime: 0 };
+            
+            // Reset player
+            player = new Player(canvas.width / 2, canvas.height / 2);
+            
+            // Clear arrays
+            enemies = [];
+            projectiles = [];
+            enemyProjectiles = [];
+            powerUps = [];
+            particles = [];
+            rainParticles = [];
+            fireTrails = [];
+            // Init paint bitmap
+            paintCanvas = document.createElement('canvas');
+            paintCanvas.width = canvas.width;
+            paintCanvas.height = canvas.height;
+            paintCtx = paintCanvas.getContext('2d');
+            groundFlames = [];
+            
+            // Reset buffs
+            playerBuffs = {
+                diamond: 0,
+                duck: 0,
+                skully: 0,
+                halo: 0,
+                raincloud: 0,
+                flame: 0
+            };
+            
+            // Reset touch controls
+            leftZone.active = false;
+            leftZone.touchId = null;
+            leftZone.currentDirection = { x: 0, y: 0, angle: 0 };
+            rightZone.active = false;
+            rightZone.touchId = null;
+            rightZone.currentDirection = { x: 0, y: 0, angle: 0 };
+            zoneLabelsVisible = 0;
+            lastAutoFireTime = 0;
+            
+            // Initialize stars and reset continuous spawning
+            if (stars.length === 0) initStars();
+            lastEnemySpawnTime = Date.now();
+            nextSpawnDelay = 1000; // Start spawning after 1 second
+        }
+        
+        function restartGame() {
+            startGame();
+        }
+        
+        // Main game loop
+        function gameLoop() {
+            try {
+                update();
+                draw();
+            } catch(e) {
+                ctx.fillStyle = 'red';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText('CRASH: ' + e.message, 10, 80);
+                ctx.fillText('at: ' + e.stack?.split('\n')[1]?.trim(), 10, 100);
+                console.error('Game loop crash:', e);
+            }
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Initialize and start
+        async function init() {
+            // Show loading screen
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#333333';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading sprites...', canvas.width / 2, canvas.height / 2);
+            
+            try { 
+                await Promise.race([
+                    loadSprites(),
+                    new Promise(resolve => setTimeout(resolve, 5000)) // 5s timeout
+                ]);
+            } catch(e) { console.warn('Sprite load error (non-fatal):', e); }
+            
+            // Set initial mouse position
+            mouse.x = canvas.width / 2;
+            mouse.y = canvas.height / 2;
+            
+            gameLoop();
+        }
+        
+        init();
+    </script>
+</body>
+</html>

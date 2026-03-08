@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+*.py
+*.js
+!index.html
+test.html
+index-*.html
+.DS_Store
