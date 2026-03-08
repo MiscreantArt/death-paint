@@ -2836,25 +2836,7 @@
             ctx.lineTo(canvas.width / 2, canvas.height);
             ctx.stroke();
             
-            // Zone labels (fade after 3 seconds)
-            if (zoneLabelsVisible > 0) {
-                zoneLabelsVisible--;
-                const alpha = Math.min(1, zoneLabelsVisible / 60); // Fade out over 1 second
-                
-                ctx.globalAlpha = alpha * 0.7;
-                ctx.font = '16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillStyle = '#cc9900';
-                
-                // "MOVE" label bottom-left
-                ctx.fillText('MOVE', canvas.width / 4, canvas.height - 20);
-                
-                // "SHOOT" label bottom-right
-                ctx.fillStyle = '#0088cc';
-                ctx.fillText('SHOOT', (canvas.width * 3) / 4, canvas.height - 20);
-                
-                ctx.globalAlpha = 1;
-            }
+            // Zone labels removed — toolbar covers that area
             
             ctx.restore();
         }
