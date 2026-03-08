@@ -82,6 +82,7 @@
         let paintRainActive = false;
         let paintRainDrops = [];
         let paintRainTimer = 0;
+        let paintRainPhase = 'falling';
         let gamePaused = false;
         
         // Kill streak → paint rain system
@@ -96,19 +97,20 @@
         
         function triggerPaintRain() {
             paintRainActive = true;
-            paintRainTimer = 180; // 3 seconds at 60fps
+            paintRainTimer = 600; // 10 seconds max — but stops when canvas is covered
             paintRainDrops = [];
+            paintRainPhase = 'falling'; // 'falling' → 'settling' → done
             // Musical celebration — ascending major arpeggio
             const celebNotes = [523, 659, 784, 1047, 1319, 1568];
             celebNotes.forEach((note, i) => {
                 setTimeout(() => {
-                    synthTone(note, 0.3, 0.08, 'sine');
-                    synthTone(note * 0.5, 0.2, 0.04, 'sine');
+                    synthTone(note, 0.3, 0.15, 'sine');
+                    synthTone(note * 0.5, 0.2, 0.08, 'sine');
                 }, i * 80);
             });
             // Final chord
             setTimeout(() => {
-                synthChord([523, 659, 784, 1047], 0.8, 0.12, 'sine');
+                synthChord([523, 659, 784, 1047], 0.8, 0.2, 'sine');
             }, celebNotes.length * 80);
             haptic([15, 10, 15, 10, 15, 10, 30]);
         }
@@ -295,16 +297,16 @@
                 if (!soundDefs._killNote) soundDefs._killNote = 0;
                 const note = scale[soundDefs._killNote % scale.length];
                 soundDefs._killNote++;
-                synthTone(note, 0.15, 0.1, 'sine');
-                synthTone(note * 2, 0.1, 0.04, 'sine'); // octave shimmer
-                synthNoise(0.04, 0.06, 2000); // soft pop
+                synthTone(note, 0.15, 0.22, 'sine');
+                synthTone(note * 2, 0.1, 0.1, 'sine'); // octave shimmer
+                synthNoise(0.04, 0.1, 2000); // soft pop
                 haptic(15);
             },
             'kill-sound': () => {
                 // Complementary chime — fifth above the last kill note
                 const scale = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880, 1047];
                 const note = scale[(soundDefs._killNote || 0) % scale.length];
-                synthTone(note * 1.5, 0.08, 0.03, 'sine');
+                synthTone(note * 1.5, 0.08, 0.08, 'sine');
             },
             'player-hit': () => {
                 // Low warning thump
@@ -2195,16 +2197,36 @@
             // Update paint rain
             if (paintRainActive) {
                 paintRainTimer--;
-                // Spawn new drops
-                for (let i = 0; i < 8; i++) {
+                
+                // Check canvas coverage to decide when to settle
+                if (paintRainPhase === 'falling' && paintCtx) {
+                    // Sample coverage every 30 frames
+                    if (paintRainTimer % 30 === 0) {
+                        const sampleData = paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height).data;
+                        let painted = 0, total = 0;
+                        // Sample every 20th pixel for performance
+                        for (let i = 3; i < sampleData.length; i += 80) {
+                            total++;
+                            if (sampleData[i] > 10) painted++;
+                        }
+                        const coverage = painted / total;
+                        if (coverage > 0.85) {
+                            paintRainPhase = 'settling';
+                        }
+                    }
+                }
+                
+                // Spawn rate depends on phase
+                const spawnCount = paintRainPhase === 'falling' ? 12 : Math.max(0, Math.floor(paintRainTimer / 30));
+                for (let i = 0; i < spawnCount; i++) {
                     paintRainDrops.push({
                         x: Math.random() * canvas.width,
                         y: -10 - Math.random() * 20,
                         vy: 3 + Math.random() * 5,
-                        vx: (Math.random() - 0.5) * 2,
-                        size: 2 + Math.random() * 4,
+                        vx: (Math.random() - 0.5) * 1.5,
+                        size: 3 + Math.random() * 5,
                         color: pixelColors[Math.floor(Math.random() * pixelColors.length)],
-                        life: 120 + Math.random() * 60
+                        life: 180
                     });
                 }
                 // Update existing drops
@@ -2212,18 +2234,21 @@
                     d.x += d.vx;
                     d.y += d.vy;
                     d.life--;
-                    // When drops hit bottom or expire, splat on paint canvas
-                    if (d.y >= canvas.height - 5 || d.life <= 0) {
+                    // When drops land, paint a round splat (not square)
+                    if (d.y >= canvas.height - TOOLBAR_H - 5 || d.life <= 0) {
                         if (paintCtx) {
                             paintCtx.fillStyle = d.color;
-                            const splatSize = d.size * (1 + Math.random());
-                            paintCtx.fillRect(d.x - splatSize, d.y - splatSize, splatSize * 2, splatSize * 2);
+                            const r = d.size * (0.8 + Math.random() * 0.6);
+                            paintCtx.beginPath();
+                            paintCtx.arc(d.x, Math.min(d.y, canvas.height - TOOLBAR_H), r, 0, Math.PI * 2);
+                            paintCtx.fill();
                         }
                         return false;
                     }
                     return true;
                 });
-                if (paintRainTimer <= 0) {
+                // End when settling phase runs out of drops or timer expires
+                if ((paintRainPhase === 'settling' && paintRainDrops.length === 0 && spawnCount === 0) || paintRainTimer <= 0) {
                     paintRainActive = false;
                     paintRainDrops = [];
                 }
@@ -3115,6 +3140,7 @@
             paintRainActive = false;
             paintRainDrops = [];
             paintRainTimer = 0;
+            paintRainPhase = 'falling';
             soundDefs._killNote = 0; // Reset musical kill scale
             saveButtonRect = null;
             chromeDrops = [];
