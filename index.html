@@ -136,6 +136,7 @@
         let paintCtx = null;
         let groundFlames = [];
         let stars = [];
+        let activeChromieWave = null;
         
         // ===== SOUND SYSTEM (Web Audio API — core sounds only) =====
         let audioCtx = null;
@@ -978,6 +979,10 @@
                 ctx.ellipse(this.x, this.y + this.size * 0.8, this.size * 0.4, this.size * 0.1, 0, 0, Math.PI * 2);
                 ctx.fill();
                 
+                // Subtle white glow so character pops over painted canvas
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = 'rgba(255,255,255,0.8)';
+                
                 // Draw sprite using sprite sheets
                 // Determine which sprite sheet to use based on active power-ups
                 // Priority: skully > halo > duck > raincloud > flame > diamond (most visually distinctive first)
@@ -1219,6 +1224,10 @@
                 ctx.beginPath();
                 ctx.ellipse(this.x, this.y + this.size * 0.8, this.size * 0.35, this.size * 0.09, 0, 0, Math.PI * 2);
                 ctx.fill();
+                
+                // Subtle white glow so character pops over painted canvas
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'rgba(255,255,255,0.7)';
                 
                 // NEW: Hit flash effect
                 if (this.hitFlash > 0) {
@@ -1497,7 +1506,8 @@
             
             createChromieWave() {
                 // Create expanding colorful circle wave that kills all enemies
-                const wave = {
+                // Stored as global state so it renders UNDER enemies in the main draw loop
+                activeChromieWave = {
                     x: player.x,
                     y: player.y,
                     radius: 0,
@@ -1506,52 +1516,6 @@
                     colors: ['#ff00ff', '#ff4400', '#ffff00', '#00ff00', '#00ffff', '#0044ff'],
                     colorIndex: 0
                 };
-                
-                // Create expanding wave effect
-                const expandWave = () => {
-                    if (wave.radius < wave.maxRadius) {
-                        wave.radius += wave.speed;
-                        wave.colorIndex = (wave.colorIndex + 0.2) % wave.colors.length;
-                        
-                        // Check collision with enemies
-                        enemies.forEach((enemy, index) => {
-                            const dx = enemy.x - wave.x;
-                            const dy = enemy.y - wave.y;
-                            const dist = Math.sqrt(dx * dx + dy * dy);
-                            
-                            if (dist <= wave.radius && dist >= wave.radius - wave.speed) {
-                                // Kill enemy - tier-based scoring
-                                let basePoints = 100; // Tier 1 default
-                                if (enemy.tier === 2) basePoints = 200;
-                                else if (enemy.tier === 3) basePoints = 300;
-                                else if (enemy.tier === 4) basePoints = 500;
-                                else if (enemy.tier === 5) basePoints = 1000;
-                                
-                                const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
-                                score += points;
-                                
-                                // Colorful pixel death explosion
-                                if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
-                                
-                                playSound('enemy-death');
-                                playSound('kill-sound');
-                                enemies.splice(index, 1);
-                            }
-                        });
-                        
-                        // Draw the wave
-                        ctx.save();
-                        ctx.strokeStyle = wave.colors[Math.floor(wave.colorIndex)];
-                        ctx.lineWidth = 4;
-                        ctx.beginPath();
-                        ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
-                        ctx.stroke();
-                        ctx.restore();
-                        
-                        requestAnimationFrame(expandWave);
-                    }
-                };
-                expandWave();
             }
             
             createCrownBurst() {
@@ -2203,6 +2167,51 @@
                     });
                     fireTrails = [];
                 }
+                // Update and draw chromie wave UNDER enemies
+                if (activeChromieWave) {
+                    const wave = activeChromieWave;
+                    wave.radius += wave.speed;
+                    wave.colorIndex = (wave.colorIndex + 0.2) % wave.colors.length;
+                    
+                    // Check collision with enemies
+                    for (let i = enemies.length - 1; i >= 0; i--) {
+                        const enemy = enemies[i];
+                        const dx = enemy.x - wave.x;
+                        const dy = enemy.y - wave.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist <= wave.radius && dist >= wave.radius - wave.speed) {
+                            let basePoints = 100;
+                            if (enemy.tier === 2) basePoints = 200;
+                            else if (enemy.tier === 3) basePoints = 300;
+                            else if (enemy.tier === 4) basePoints = 500;
+                            else if (enemy.tier === 5) basePoints = 1000;
+                            
+                            const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
+                            score += points;
+                            
+                            if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                            
+                            playSound('enemy-death');
+                            playSound('kill-sound');
+                            enemies.splice(i, 1);
+                        }
+                    }
+                    
+                    // Draw the wave (renders under enemies)
+                    ctx.save();
+                    ctx.strokeStyle = wave.colors[Math.floor(wave.colorIndex)];
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                    
+                    if (wave.radius >= wave.maxRadius) {
+                        activeChromieWave = null;
+                    }
+                }
+                
                 particles.forEach(particle => particle.draw());
                 projectiles.forEach(proj => proj.draw());
                 enemies.forEach(enemy => enemy.draw());
