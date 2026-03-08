@@ -254,15 +254,22 @@
                 haptic(12);
             },
             'enemy-death': () => {
-                // Paint-burst pop — wet, colorful, satisfying
-                synthNoise(0.06, 0.1, 2500); // initial pop
-                synthTone(440, 0.12, 0.1, 'sine', 880); // rising tone
-                synthTone(660, 0.1, 0.06, 'sine'); // chime
-                haptic(18);
+                // Musical paint pop — each kill plays next note in pentatonic scale
+                // Creates an ascending melody as you kill enemies
+                const scale = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880, 1047];
+                if (!soundDefs._killNote) soundDefs._killNote = 0;
+                const note = scale[soundDefs._killNote % scale.length];
+                soundDefs._killNote++;
+                synthTone(note, 0.15, 0.1, 'sine');
+                synthTone(note * 2, 0.1, 0.04, 'sine'); // octave shimmer
+                synthNoise(0.04, 0.06, 2000); // soft pop
+                haptic(15);
             },
             'kill-sound': () => {
-                // Gentle melodic ping
-                synthTone(1047, 0.1, 0.04, 'sine');
+                // Complementary chime — fifth above the last kill note
+                const scale = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880, 1047];
+                const note = scale[(soundDefs._killNote || 0) % scale.length];
+                synthTone(note * 1.5, 0.08, 0.03, 'sine');
             },
             'player-hit': () => {
                 // Low warning thump
@@ -2034,14 +2041,20 @@
                     fireTrails.push(t);
                 }
                 
-                // Schedule all enemies to chain-explode
+                // Schedule all enemies to chain-explode — each plays descending note
                 const enemyCopy = [...enemies];
+                const deathScale = [1047, 988, 880, 784, 659, 587, 523, 440, 392, 330, 262, 247, 220, 196, 175];
                 enemyCopy.forEach((enemy, idx) => {
                     setTimeout(() => {
                         if (gameState !== 'dying') return;
                         spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
                         if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
-                        playSound('enemy-death');
+                        // Descending musical note instead of generic death sound
+                        const deathNote = deathScale[idx % deathScale.length];
+                        synthTone(deathNote, 0.2, 0.08, 'sine');
+                        synthTone(deathNote * 0.5, 0.15, 0.04, 'sine');
+                        synthNoise(0.05, 0.05, 1500);
+                        haptic(12);
                         // Paint fling — each pixel picks ONE bold color and commits
                         // Mix of thick slow globs + fast thin streaks
                         for (let i = 0; i < 70; i++) {
@@ -2302,7 +2315,11 @@
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
             } else if (gameState === 'gameOver') {
-                drawGameOver();
+                if (hangMode) {
+                    drawHangMode();
+                } else {
+                    drawGameOver();
+                }
             }
             
             ctx.restore();
@@ -2351,6 +2368,8 @@
         let gameOverTime = 0;
         let saveButtonY = 0;
         let saveButtonRect = null;
+        let hangButtonRect = null;
+        let hangMode = false; // When true, show art in gallery frame view
         
         function saveArtwork() {
             if (!capturedArt) return;
@@ -2432,19 +2451,31 @@
             
 
             
-            // Save button
+            // Buttons row
             if (elapsed > 2) {
-                const btnY = bottomY + 62;
-                const btnW = 150, btnH = 36;
-                saveButtonRect = { x: cx - btnW / 2, y: btnY, w: btnW, h: btnH };
+                const btnY = bottomY + 55;
+                const btnW = 130, btnH = 36, gap = 12;
                 
+                // Save button
+                const saveBtnX = cx - btnW - gap/2;
+                saveButtonRect = { x: saveBtnX, y: btnY, w: btnW, h: btnH };
                 ctx.fillStyle = '#1a1a1a';
                 ctx.beginPath();
-                ctx.roundRect(saveButtonRect.x, saveButtonRect.y, btnW, btnH, 8);
+                ctx.roundRect(saveBtnX, btnY, btnW, btnH, 8);
                 ctx.fill();
-                ctx.font = 'bold 14px Arial';
+                ctx.font = 'bold 13px Arial';
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText('save to photos', cx, btnY + 23);
+                ctx.fillText('save to photos', saveBtnX + btnW/2, btnY + 23);
+                
+                // Hang art button
+                const hangBtnX = cx + gap/2;
+                hangButtonRect = { x: hangBtnX, y: btnY, w: btnW, h: btnH };
+                ctx.fillStyle = '#4a3520';
+                ctx.beginPath();
+                ctx.roundRect(hangBtnX, btnY, btnW, btnH, 8);
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('🖼 hang it', hangBtnX + btnW/2, btnY + 23);
             }
             
             // Tap to play again
@@ -2453,12 +2484,108 @@
                 ctx.globalAlpha = contentAlpha * pulse;
                 ctx.font = '13px Arial';
                 ctx.fillStyle = '#bbbbbb';
-                ctx.fillText('tap to paint again', cx, bottomY + 125);
+                ctx.fillText('tap to paint again', cx, bottomY + 120);
             }
             
             ctx.restore();
         }
         
+        function drawHangMode() {
+            // Gallery wall — warm off-white with subtle texture
+            const wallColor = '#f5f0e8';
+            ctx.fillStyle = wallColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Subtle wall texture — faint horizontal lines
+            ctx.strokeStyle = 'rgba(200,190,175,0.15)';
+            ctx.lineWidth = 0.5;
+            for (let y = 0; y < canvas.height; y += 8) {
+                ctx.beginPath();
+                ctx.moveTo(0, y + Math.sin(y * 0.1) * 0.5);
+                ctx.lineTo(canvas.width, y + Math.cos(y * 0.1) * 0.5);
+                ctx.stroke();
+            }
+            
+            if (!capturedArt) return;
+            
+            // Frame dimensions — painting centered with generous wall space
+            const maxW = canvas.width * 0.65;
+            const maxH = canvas.height * 0.55;
+            const artRatio = capturedArt.width / capturedArt.height;
+            let artW, artH;
+            if (artRatio > maxW / maxH) {
+                artW = maxW; artH = maxW / artRatio;
+            } else {
+                artH = maxH; artW = maxH * artRatio;
+            }
+            const artX = (canvas.width - artW) / 2;
+            const artY = (canvas.height - artH) / 2 - 30;
+            
+            // Drop shadow behind frame
+            ctx.shadowColor = 'rgba(0,0,0,0.2)';
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetX = 4;
+            ctx.shadowOffsetY = 6;
+            
+            // Thick wooden frame
+            const frameW = 12;
+            ctx.fillStyle = '#3d2b1a'; // dark wood
+            ctx.fillRect(artX - frameW, artY - frameW, artW + frameW*2, artH + frameW*2);
+            
+            // Inner frame highlight
+            ctx.fillStyle = '#5a3f2b'; // lighter wood
+            ctx.fillRect(artX - frameW + 3, artY - frameW + 3, artW + frameW*2 - 6, artH + frameW*2 - 6);
+            
+            // Inner dark edge
+            ctx.fillStyle = '#2a1a0a';
+            ctx.fillRect(artX - 2, artY - 2, artW + 4, artH + 4);
+            
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            // The painting itself
+            ctx.drawImage(capturedArt, artX, artY, artW, artH);
+            
+            // Museum label underneath
+            const labelY = artY + artH + frameW + 30;
+            ctx.textAlign = 'center';
+            const cx = canvas.width / 2;
+            
+            // Title in italic
+            ctx.font = 'italic 16px Georgia, serif';
+            ctx.fillStyle = '#444444';
+            ctx.fillText(currentArtTitle || 'Untitled', cx, labelY);
+            
+            // Coverage as medium info
+            ctx.font = '12px Georgia, serif';
+            ctx.fillStyle = '#888888';
+            ctx.fillText(`${canvasCoverage}% canvas covered`, cx, labelY + 22);
+            
+            // "made with Death Paint" — gallery attribution
+            ctx.font = '10px Georgia, serif';
+            ctx.fillStyle = '#aaaaaa';
+            ctx.fillText('made with Death Paint', cx, labelY + 40);
+            
+            // Back / save buttons
+            ctx.font = 'bold 12px Arial';
+            const backText = '← back';
+            const saveText = 'save to photos';
+            
+            // Back button (top left)
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#999999';
+            ctx.fillText(backText, 20, 30);
+            hangButtonRect = { x: 5, y: 10, w: 80, h: 30 }; // reuse for back tap
+            
+            // Save button (top right)  
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#999999';
+            ctx.fillText(saveText, canvas.width - 20, 30);
+            saveButtonRect = { x: canvas.width - 140, y: 10, w: 130, h: 30 };
+        }
+
         // Draw UI — clean art mode, nothing to show
         function drawUI() {}
         
@@ -2681,17 +2808,28 @@
                     playSound('menu-tap');
                     startGame();
                 } else if (gameState === 'gameOver') {
-                    // Check save button first
+                    const cx = mouse.x, cy = mouse.y;
+                    // Save button
                     if (saveButtonRect) {
-                        const cx = mouse.x, cy = mouse.y;
                         if (cx >= saveButtonRect.x && cx <= saveButtonRect.x + saveButtonRect.w &&
                             cy >= saveButtonRect.y && cy <= saveButtonRect.y + saveButtonRect.h) {
                             saveArtwork();
                             return;
                         }
                     }
-                    if (Date.now() - gameOverTime < 4000) return; // Let them admire the art
+                    // Hang button / back button
+                    if (hangButtonRect) {
+                        if (cx >= hangButtonRect.x && cx <= hangButtonRect.x + hangButtonRect.w &&
+                            cy >= hangButtonRect.y && cy <= hangButtonRect.y + hangButtonRect.h) {
+                            hangMode = !hangMode; // Toggle gallery view
+                            playSound('menu-tap');
+                            return;
+                        }
+                    }
+                    if (hangMode) return; // In gallery view, only buttons work
+                    if (Date.now() - gameOverTime < 4000) return;
                     playSound('menu-tap');
+                    hangMode = false;
                     restartGame();
                 }
             } catch(e) {
@@ -2709,6 +2847,8 @@
             currentDeathMessage = '';
             capturedArt = null;
             canvasCoverage = 0;
+            hangMode = false;
+            soundDefs._killNote = 0; // Reset musical kill scale
             saveButtonRect = null;
             chromeDrops = [];
             dyingDriftPixels = [];
