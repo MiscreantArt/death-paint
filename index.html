@@ -2317,11 +2317,7 @@
             } else if (gameState === 'gallery') {
                 drawHangMode();
             } else if (gameState === 'gameOver') {
-                if (hangMode) {
-                    drawHangMode();
-                } else {
-                    drawGameOver();
-                }
+                drawGameOver();
             }
             
             ctx.restore();
@@ -2441,94 +2437,111 @@
         function drawGameOver() {
             // Fade in timing
             const elapsed = (Date.now() - gameOverTime) / 1000;
-            const fadeIn = Math.min(1, elapsed / 1.5); // 1.5s fade in
+            const fadeIn = Math.min(1, elapsed / 1.5);
             
-            // Soft white background fade
-            ctx.fillStyle = `rgba(245,243,240,${fadeIn * 0.92})`;
+            // Gallery wall background
+            const wallColor = `rgba(245,240,232,${fadeIn * 0.95})`;
+            ctx.fillStyle = wallColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            if (fadeIn < 0.3) return; // Let it fade in before showing frame
+            if (fadeIn < 0.3) return;
+            
+            // Subtle wall texture
+            if (fadeIn > 0.5) {
+                ctx.strokeStyle = `rgba(200,190,175,${(fadeIn - 0.5) * 0.15})`;
+                ctx.lineWidth = 0.5;
+                for (let y = 0; y < canvas.height; y += 8) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y + Math.sin(y * 0.1) * 0.5);
+                    ctx.lineTo(canvas.width, y + Math.cos(y * 0.1) * 0.5);
+                    ctx.stroke();
+                }
+            }
             
             const contentAlpha = Math.min(1, (fadeIn - 0.3) / 0.7);
             ctx.save();
             ctx.globalAlpha = contentAlpha;
             
-            // Artwork fills most of screen, info tucked at bottom
-            const margin = 12;
-            const frameX = margin;
-            const frameY = margin;
-            const frameW = canvas.width - margin * 2;
-            // Reserve space at bottom for info
-            const infoHeight = 180;
-            const frameH = canvas.height - infoHeight - margin;
+            if (!capturedArt) { ctx.restore(); return; }
             
-            // Thin frame border
-            ctx.strokeStyle = '#2a2218';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(frameX - 2, frameY - 2, frameW + 4, frameH + 4);
-            
-            // The actual painting
-            if (capturedArt) {
-                ctx.drawImage(capturedArt, frameX, frameY, frameW, frameH);
+            // Frame dimensions — painting centered with gallery wall space
+            const maxW = canvas.width * 0.7;
+            const maxH = canvas.height * 0.5;
+            const artRatio = capturedArt.width / capturedArt.height;
+            let artW, artH;
+            if (artRatio > maxW / maxH) {
+                artW = maxW; artH = maxW / artRatio;
+            } else {
+                artH = maxH; artW = maxH * artRatio;
             }
+            const artX = (canvas.width - artW) / 2;
+            const artY = (canvas.height - artH) / 2 - 50;
             
-            // --- Info at bottom with breathing room ---
+            // Drop shadow
+            ctx.shadowColor = 'rgba(0,0,0,0.2)';
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetX = 4;
+            ctx.shadowOffsetY = 6;
+            
+            // Wooden frame
+            const fw = 10;
+            ctx.fillStyle = '#3d2b1a';
+            ctx.fillRect(artX - fw, artY - fw, artW + fw*2, artH + fw*2);
+            ctx.fillStyle = '#5a3f2b';
+            ctx.fillRect(artX - fw + 3, artY - fw + 3, artW + fw*2 - 6, artH + fw*2 - 6);
+            ctx.fillStyle = '#2a1a0a';
+            ctx.fillRect(artX - 2, artY - 2, artW + 4, artH + 4);
+            
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            // The painting
+            ctx.drawImage(capturedArt, artX, artY, artW, artH);
+            
+            // Museum label
             const cx = canvas.width / 2;
-            const bottomY = frameY + frameH + 30;
+            const labelY = artY + artH + fw + 28;
             ctx.textAlign = 'center';
             
-            // Generate title once
             if (!currentArtTitle) {
-                const base = artTitles[Math.floor(Math.random() * artTitles.length)];
-                currentArtTitle = base + Math.floor(Math.random() * 999);
+                currentArtTitle = artTitles[Math.floor(Math.random() * artTitles.length)] + Math.floor(Math.random() * 999);
             }
             
-            // Title
-            ctx.font = 'italic 17px Georgia, serif';
-            ctx.fillStyle = '#555555';
-            ctx.fillText(currentArtTitle, cx, bottomY);
+            // Title italic
+            ctx.font = 'italic 16px Georgia, serif';
+            ctx.fillStyle = '#444444';
+            ctx.fillText(currentArtTitle, cx, labelY);
             
-            // Coverage — single line: "46% canvas covered"
-            ctx.font = 'bold 28px Arial';
-            ctx.fillStyle = '#111111';
-            ctx.fillText(`${canvasCoverage}% canvas covered`, cx, bottomY + 34);
+            // Coverage
+            ctx.font = '13px Georgia, serif';
+            ctx.fillStyle = '#777777';
+            ctx.fillText(`${canvasCoverage}% canvas covered`, cx, labelY + 20);
             
-
-            
-            // Buttons row
+            // Buttons
             if (elapsed > 2) {
-                const btnY = bottomY + 55;
-                const btnW = 130, btnH = 36, gap = 12;
+                const btnY = labelY + 38;
+                const btnW = 130, btnH = 34;
                 
-                // Save button
-                const saveBtnX = cx - btnW - gap/2;
-                saveButtonRect = { x: saveBtnX, y: btnY, w: btnW, h: btnH };
+                // Save button — centered
+                saveButtonRect = { x: cx - btnW/2, y: btnY, w: btnW, h: btnH };
                 ctx.fillStyle = '#1a1a1a';
                 ctx.beginPath();
-                ctx.roundRect(saveBtnX, btnY, btnW, btnH, 8);
+                ctx.roundRect(saveButtonRect.x, btnY, btnW, btnH, 8);
                 ctx.fill();
-                ctx.font = 'bold 13px Arial';
+                ctx.font = 'bold 12px Arial';
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText('save to photos', saveBtnX + btnW/2, btnY + 23);
-                
-                // Hang art button
-                const hangBtnX = cx + gap/2;
-                hangButtonRect = { x: hangBtnX, y: btnY, w: btnW, h: btnH };
-                ctx.fillStyle = '#4a3520';
-                ctx.beginPath();
-                ctx.roundRect(hangBtnX, btnY, btnW, btnH, 8);
-                ctx.fill();
-                ctx.fillStyle = '#ffffff';
-                ctx.fillText('🖼 hang it', hangBtnX + btnW/2, btnY + 23);
+                ctx.fillText('save to photos', cx, btnY + 22);
             }
             
-            // Tap to play again
+            // Tap to paint again
             if (elapsed > 4) {
                 const pulse = 0.4 + (Math.sin(Date.now() * 0.003) + 1) * 0.3;
                 ctx.globalAlpha = contentAlpha * pulse;
-                ctx.font = '13px Arial';
+                ctx.font = '12px Arial';
                 ctx.fillStyle = '#bbbbbb';
-                ctx.fillText('tap to paint again', cx, bottomY + 120);
+                ctx.fillText('tap to paint again', cx, labelY + 100);
             }
             
             ctx.restore();
@@ -2933,19 +2946,8 @@
                             return;
                         }
                     }
-                    // Hang button / back button
-                    if (hangButtonRect) {
-                        if (cx >= hangButtonRect.x && cx <= hangButtonRect.x + hangButtonRect.w &&
-                            cy >= hangButtonRect.y && cy <= hangButtonRect.y + hangButtonRect.h) {
-                            hangMode = !hangMode; // Toggle gallery view
-                            playSound('menu-tap');
-                            return;
-                        }
-                    }
-                    if (hangMode) return; // In gallery view, only buttons work
                     if (Date.now() - gameOverTime < 4000) return;
                     playSound('menu-tap');
-                    hangMode = false;
                     restartGame();
                 }
             } catch(e) {
