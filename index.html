@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>Death Paint</title>
     <style>
         body {
@@ -12,7 +12,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            min-height: 100dvh;
+            height: 100dvh;
             font-family: 'Courier New', monospace;
             overflow: hidden;
         }
@@ -35,20 +36,31 @@
         const ctx = canvas.getContext('2d');
         
         // Responsive canvas sizing - full screen on mobile
+        // Use visualViewport API to get actual visible area (excludes browser chrome)
+        function getViewportSize() {
+            if (window.visualViewport) {
+                return { w: window.visualViewport.width, h: window.visualViewport.height };
+            }
+            return { w: window.innerWidth, h: window.innerHeight };
+        }
         function resizeCanvas() {
-            if (window.innerWidth <= 768) {
-                // Mobile: use full screen
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
+            const vp = getViewportSize();
+            if (vp.w <= 768) {
+                // Mobile: use visible viewport (not hidden behind address bar)
+                canvas.width = vp.w;
+                canvas.height = vp.h;
             } else {
                 // Desktop: maintain aspect ratio with padding
-                canvas.width = Math.min(1024, window.innerWidth - 40);
-                canvas.height = Math.min(768, window.innerHeight - 40);
+                canvas.width = Math.min(1024, vp.w - 40);
+                canvas.height = Math.min(768, vp.h - 40);
             }
         }
         
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', resizeCanvas);
+        }
 
         // Game state
         let gameState = 'menu'; // menu, playing, dying, gameOver
