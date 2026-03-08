@@ -940,7 +940,7 @@
                     
                     // Keep player in bounds
                     this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
-                    this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                    this.y = Math.max(TOOLBAR_H + this.size, Math.min(canvas.height - this.size, this.y));
                 }
                 
                 // Determine facing direction with correct priority:
