@@ -163,9 +163,31 @@
         let audioCtx = null;
         let bgMusic = null;
 
+        const soundBuffers = {};
+        const fileVolumes = {
+            'laser-shoot': 0.10, 'player-hit': 0.4, 'player-death': 0.5,
+            'enemy-hit': 0.2, 'enemy-death': 0.12, 'game-over': 0.5,
+            'kill-sound': 0.15, 'chromie-shockwave': 0.3, 'crown-collect': 0.3,
+            'duck-quack': 0.3, 'flame-activate': 0.3, 'halo-activate': 0.3,
+            'skully-activate': 0.3, 'raincloud-activate': 0.3, 'menu-tap': 0.2,
+            'powerup-collect': 0.3, 'powerup-spawn': 0.15, 'powerup-expire': 0.15,
+            'game-start': 0.3, 'godlike-stinger': 0.35, 'legendary-stinger': 0.3,
+            'rampage-stinger': 0.3, 'unstoppable-stinger': 0.3,
+            'combo-ping': 0.2, 'enemy-whoosh': 0.15,
+            'splat-current': 0.2, 'splat-v1': 0.2, 'splat-v2': 0.2, 'splat-v3': 0.2
+        };
+
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // Load wav files as primary sounds
+                Object.keys(fileVolumes).forEach(name => {
+                    fetch(`sounds/${name}.wav`)
+                        .then(r => { if (!r.ok) throw 'missing'; return r.arrayBuffer(); })
+                        .then(buf => audioCtx.decodeAudioData(buf))
+                        .then(decoded => { soundBuffers[name] = decoded; })
+                        .catch(() => {}); // Will fall back to synth
+                });
             }
             // iOS/Safari: AudioContext starts suspended, must resume in user gesture
             if (audioCtx.state === 'suspended') {
@@ -233,7 +255,7 @@
         const soundThrottles = {};
         const throttleMs = { 'laser-shoot': 120, 'enemy-hit': 60, 'kill-sound': 60, 'enemy-death': 40 };
 
-        // === Sound definitions (all synthesized) ===
+        // === Sound definitions (synth fallback + haptic patterns) ===
         const soundDefs = {
             'laser-shoot': () => {
                 // Quick bright zap — musical ping, not squeaky
@@ -390,14 +412,30 @@
         function playSound(name) {
             if (!audioCtx) return;
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            const def = soundDefs[name];
-            if (!def) return;
             const now = performance.now();
             if (throttleMs[name]) {
                 if (soundThrottles[name] && now - soundThrottles[name] < throttleMs[name]) return;
                 soundThrottles[name] = now;
             }
-            try { def(); } catch(e) {}
+            // Try wav file first, fall back to synth
+            if (soundBuffers[name]) {
+                try {
+                    const source = audioCtx.createBufferSource();
+                    const gain = audioCtx.createGain();
+                    source.buffer = soundBuffers[name];
+                    gain.gain.value = fileVolumes[name] || 0.2;
+                    source.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    source.start(0);
+                    // Haptics even for file-based sounds
+                    const def = soundDefs[name];
+                    if (def && def.haptic) haptic(def.haptic);
+                    return;
+                } catch(e) {}
+            }
+            // Synth fallback
+            const def = soundDefs[name];
+            if (def) { try { def(); } catch(e) {} }
         }
         
         // Sprites - new structure for sprite sheets
