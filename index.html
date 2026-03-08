@@ -82,7 +82,6 @@
         let paintRainActive = false;
         let paintRainDrops = [];
         let paintRainTimer = 0;
-        let paintRainPhase = 'falling';
         let gamePaused = false;
         
         // Kill streak → paint rain system
@@ -97,9 +96,8 @@
         
         function triggerPaintRain() {
             paintRainActive = true;
-            paintRainTimer = 600; // 10 seconds max — but stops when canvas is covered
+            paintRainTimer = 60; // Only spawn drops for 1 second, then let them fall and settle
             paintRainDrops = [];
-            paintRainPhase = 'falling'; // 'falling' → 'settling' → done
             // Musical celebration — ascending major arpeggio
             const celebNotes = [523, 659, 784, 1047, 1319, 1568];
             celebNotes.forEach((note, i) => {
@@ -2196,61 +2194,40 @@
             
             // Update paint rain
             if (paintRainActive) {
-                paintRainTimer--;
-                
-                // Check canvas coverage to decide when to settle
-                if (paintRainPhase === 'falling' && paintCtx) {
-                    // Sample coverage every 30 frames
-                    if (paintRainTimer % 30 === 0) {
-                        const sampleData = paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height).data;
-                        let painted = 0, total = 0;
-                        // Sample every 20th pixel for performance
-                        for (let i = 3; i < sampleData.length; i += 80) {
-                            total++;
-                            if (sampleData[i] > 10) painted++;
-                        }
-                        const coverage = painted / total;
-                        if (coverage > 0.85) {
-                            paintRainPhase = 'settling';
-                        }
+                // Spawn drops only during the initial burst
+                if (paintRainTimer > 0) {
+                    paintRainTimer--;
+                    for (let i = 0; i < 6; i++) {
+                        paintRainDrops.push({
+                            x: Math.random() * canvas.width,
+                            y: -10 - Math.random() * 50,
+                            vy: 2 + Math.random() * 3,
+                            vx: (Math.random() - 0.5) * 1,
+                            size: 2 + Math.random() * 3,
+                            color: pixelColors[Math.floor(Math.random() * pixelColors.length)]
+                        });
                     }
                 }
-                
-                // Spawn rate depends on phase
-                const spawnCount = paintRainPhase === 'falling' ? 12 : Math.max(0, Math.floor(paintRainTimer / 30));
-                for (let i = 0; i < spawnCount; i++) {
-                    paintRainDrops.push({
-                        x: Math.random() * canvas.width,
-                        y: -10 - Math.random() * 20,
-                        vy: 3 + Math.random() * 5,
-                        vx: (Math.random() - 0.5) * 1.5,
-                        size: 3 + Math.random() * 5,
-                        color: pixelColors[Math.floor(Math.random() * pixelColors.length)],
-                        life: 180
-                    });
-                }
-                // Update existing drops
+                // Update drops — they fall and stick where they land
                 paintRainDrops = paintRainDrops.filter(d => {
                     d.x += d.vx;
                     d.y += d.vy;
-                    d.life--;
-                    // When drops land, paint a round splat (not square)
-                    if (d.y >= canvas.height - TOOLBAR_H - 5 || d.life <= 0) {
+                    // Hit the bottom of play area — stick to paint canvas
+                    if (d.y >= canvas.height - TOOLBAR_H - 2) {
                         if (paintCtx) {
                             paintCtx.fillStyle = d.color;
-                            const r = d.size * (0.8 + Math.random() * 0.6);
+                            const r = d.size * (0.6 + Math.random() * 0.4);
                             paintCtx.beginPath();
-                            paintCtx.arc(d.x, Math.min(d.y, canvas.height - TOOLBAR_H), r, 0, Math.PI * 2);
+                            paintCtx.arc(d.x, canvas.height - TOOLBAR_H - 2, r, 0, Math.PI * 2);
                             paintCtx.fill();
                         }
                         return false;
                     }
                     return true;
                 });
-                // End when settling phase runs out of drops or timer expires
-                if ((paintRainPhase === 'settling' && paintRainDrops.length === 0 && spawnCount === 0) || paintRainTimer <= 0) {
+                // Done when all drops have landed and no more spawning
+                if (paintRainTimer <= 0 && paintRainDrops.length === 0) {
                     paintRainActive = false;
-                    paintRainDrops = [];
                 }
             }
         }
@@ -3140,7 +3117,6 @@
             paintRainActive = false;
             paintRainDrops = [];
             paintRainTimer = 0;
-            paintRainPhase = 'falling';
             soundDefs._killNote = 0; // Reset musical kill scale
             saveButtonRect = null;
             chromeDrops = [];
