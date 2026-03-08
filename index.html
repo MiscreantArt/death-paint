@@ -81,10 +81,9 @@
         let screenShake = 0;
         let testMode = true; // Test mode always on
         
-        // NEW JUICE FEATURES
+        // Game progression features
         let gameTime = 0; // Game time in seconds for progressive difficulty
         let gameStartTime = 0; // Track when game started
-        let kills = 0; // Kill counter
         
         // Chrome power-up system
         let chromeDrops = []; // Active chrome pickups on screen
@@ -93,16 +92,8 @@
         let rainbowHue = 0; // Cycling hue
         const RAINBOW_DURATION = 600; // ~10 seconds at 60fps
         let lastChromeDrop = 0; // Timestamp of last drop
-        let killStreak = 0; // Kills without taking damage
-        let comboCount = 0; // Combo system
-        let lastKillTime = 0; // For combo timer
-        let comboMultiplier = 1; // Score multiplier
-        let slowMoFrames = 0; // Kill slowmo effect
         let enemySpeedMultiplier = 1; // Progressive difficulty
         let playerSpeedBonus = 0; // Progressive player speed
-        let floatingTexts = []; // Floating score numbers
-        let streakCallouts = []; // Streak callout messages
-        let comboDisplay = { active: false, text: '', scale: 1, alpha: 1, pulseTime: 0 }; // Combo display
         
         // Input handling
         const keys = {};
@@ -163,31 +154,9 @@
         let audioCtx = null;
         let bgMusic = null;
 
-        const soundBuffers = {};
-        const fileVolumes = {
-            'laser-shoot': 0.10, 'player-hit': 0.4, 'player-death': 0.5,
-            'enemy-hit': 0.2, 'enemy-death': 0.12, 'game-over': 0.5,
-            'kill-sound': 0.15, 'chromie-shockwave': 0.3, 'crown-collect': 0.3,
-            'duck-quack': 0.3, 'flame-activate': 0.3, 'halo-activate': 0.3,
-            'skully-activate': 0.3, 'raincloud-activate': 0.3, 'menu-tap': 0.2,
-            'powerup-collect': 0.3, 'powerup-spawn': 0.15, 'powerup-expire': 0.15,
-            'game-start': 0.3, 'godlike-stinger': 0.35, 'legendary-stinger': 0.3,
-            'rampage-stinger': 0.3, 'unstoppable-stinger': 0.3,
-            'combo-ping': 0.2, 'enemy-whoosh': 0.15,
-            'splat-current': 0.2, 'splat-v1': 0.2, 'splat-v2': 0.2, 'splat-v3': 0.2
-        };
-
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                // Load wav files as primary sounds
-                Object.keys(fileVolumes).forEach(name => {
-                    fetch(`sounds/${name}.wav`)
-                        .then(r => { if (!r.ok) throw 'missing'; return r.arrayBuffer(); })
-                        .then(buf => audioCtx.decodeAudioData(buf))
-                        .then(decoded => { soundBuffers[name] = decoded; })
-                        .catch(() => {}); // Will fall back to synth
-                });
             }
             // iOS/Safari: AudioContext starts suspended, must resume in user gesture
             if (audioCtx.state === 'suspended') {
@@ -255,50 +224,68 @@
         const soundThrottles = {};
         const throttleMs = { 'laser-shoot': 120, 'enemy-hit': 60, 'kill-sound': 60, 'enemy-death': 40 };
 
-        // === Sound definitions (synth fallback + haptic patterns) ===
+        // === Sound definitions (all synthesized) ===
         const soundDefs = {
             'laser-shoot': () => {
-                // Quick bright zap — musical ping, not squeaky
-                synthTone(880, 0.08, 0.08, 'triangle', 1760);
-                synthTone(1320, 0.05, 0.04, 'sine', 2640);
-                haptic(8);
+                // Soft melodic pew — pentatonic note, warm not harsh
+                const notes = [523, 587, 659, 784, 880]; // C5 pentatonic
+                const note = notes[Math.floor(Math.random() * notes.length)];
+                synthTone(note, 0.06, 0.06, 'sine', note * 1.5);
+                synthTone(note * 0.5, 0.04, 0.03, 'sine'); // warm sub-harmonic
+                haptic(6);
             },
             'enemy-hit': () => {
                 // Soft thud — satisfying impact
-                synthTone(200, 0.1, 0.15, 'sine', 80);
-                synthNoise(0.06, 0.08, 1500);
+                synthTone(180, 0.1, 0.12, 'sine', 60);
+                synthNoise(0.05, 0.06, 1200);
                 haptic(12);
             },
             'enemy-death': () => {
-                // Musical pop — ascending burst
-                synthTone(330, 0.08, 0.12, 'sine', 660);
-                synthTone(523, 0.1, 0.08, 'triangle', 1047);
-                synthNoise(0.08, 0.06, 2000);
-                haptic(20);
+                // Paint-burst pop — wet, colorful, satisfying
+                synthNoise(0.06, 0.1, 2500); // initial pop
+                synthTone(440, 0.12, 0.1, 'sine', 880); // rising tone
+                synthTone(660, 0.1, 0.06, 'sine'); // chime
+                haptic(18);
             },
             'kill-sound': () => {
-                // Bright chime on kill
-                synthTone(784, 0.12, 0.07, 'sine');
-                synthTone(1047, 0.1, 0.05, 'sine');
+                // Gentle melodic ping
+                synthTone(1047, 0.1, 0.04, 'sine');
             },
             'player-hit': () => {
                 // Low warning thump
-                synthTone(120, 0.15, 0.25, 'sine', 60);
-                synthNoise(0.1, 0.12, 800);
+                synthTone(110, 0.15, 0.2, 'sine', 55);
+                synthNoise(0.08, 0.1, 600);
                 haptic([30, 20, 30]);
             },
             'player-death': () => {
-                // Descending sad tone
-                synthTone(440, 0.3, 0.2, 'sine', 110);
-                synthTone(330, 0.4, 0.15, 'triangle', 82);
-                synthNoise(0.2, 0.1, 600);
-                haptic([50, 30, 80]);
+                // THE FINAL BRUSHSTROKE — bloom, not failure
+                // 1. Impact — paint splat
+                synthNoise(0.15, 0.15, 3000);
+                synthTone(120, 0.1, 0.12, 'sine', 60);
+                // 2. Bloom — warm major 7th chord fading in
+                setTimeout(() => {
+                    synthTone(262, 1.8, 0.12, 'sine');   // C4 — foundation
+                    synthTone(330, 1.6, 0.10, 'sine');   // E4
+                    synthTone(392, 1.4, 0.08, 'sine');   // G4
+                    synthTone(494, 1.2, 0.06, 'sine');   // B4 — the maj7 color
+                }, 100);
+                // 3. Shimmer — high harmonics sparkle
+                setTimeout(() => {
+                    synthTone(1047, 0.8, 0.04, 'sine');  // C6 shimmer
+                    synthTone(1319, 0.7, 0.03, 'sine');  // E6
+                    synthTone(1568, 0.6, 0.02, 'sine');  // G6
+                }, 200);
+                // 4. Resonance — low hum fades last
+                setTimeout(() => {
+                    synthTone(131, 2.0, 0.08, 'sine');   // C3 warmth
+                }, 50);
+                haptic([40, 30, 60, 30, 80]);
             },
             'game-over': () => {
-                // Minor chord fade
-                setTimeout(() => synthChord([262, 311, 392], 0.8, 0.3, 'sine'), 0);
-                setTimeout(() => synthChord([247, 294, 370], 1.0, 0.2, 'sine'), 400);
-                haptic([40, 60, 40, 60, 80]);
+                // Quiet resolution — the painting is done
+                setTimeout(() => synthChord([262, 330, 392, 494], 1.5, 0.15, 'sine'), 0);
+                setTimeout(() => synthChord([247, 311, 370, 466], 2.0, 0.1, 'sine'), 800);
+                haptic([30, 40, 30, 50, 60]);
             },
             'powerup-collect': () => {
                 // Bright ascending arpeggio
@@ -364,27 +351,7 @@
                 setTimeout(() => synthChord([1047, 1319, 1568], 0.3, 0.15, 'sine'), 240);
                 haptic([10, 10, 10, 10, 25]);
             },
-            'godlike-stinger': () => {
-                // Epic stinger
-                synthChord([523, 659, 784, 1047], 0.5, 0.2, 'sine');
-                setTimeout(() => synthChord([784, 988, 1175, 1568], 0.6, 0.15, 'sine'), 200);
-                haptic([20, 10, 40]);
-            },
-            'legendary-stinger': () => {
-                synthChord([440, 554, 659], 0.4, 0.15, 'sine');
-                setTimeout(() => synthChord([659, 831, 988], 0.5, 0.12, 'sine'), 200);
-                haptic([15, 10, 30]);
-            },
-            'rampage-stinger': () => {
-                synthTone(440, 0.15, 0.12, 'square', 880);
-                setTimeout(() => synthTone(660, 0.15, 0.12, 'square', 1320), 100);
-                haptic([10, 10, 20]);
-            },
-            'unstoppable-stinger': () => {
-                synthChord([330, 440, 554], 0.3, 0.12, 'sine');
-                setTimeout(() => synthChord([554, 659, 880], 0.4, 0.1, 'sine'), 150);
-                haptic([15, 10, 25]);
-            },
+
             'powerup-spawn': () => {
                 // Gentle sparkle
                 synthTone(1047, 0.1, 0.05, 'sine', 523);
@@ -403,10 +370,7 @@
                 synthTone(150, 0.08, 0.08, 'sine', 60);
                 haptic(10);
             },
-            'combo-ping': () => {
-                synthTone(1175, 0.08, 0.06, 'sine');
-                synthTone(1568, 0.06, 0.04, 'sine');
-            }
+
         };
 
         function playSound(name) {
@@ -417,23 +381,7 @@
                 if (soundThrottles[name] && now - soundThrottles[name] < throttleMs[name]) return;
                 soundThrottles[name] = now;
             }
-            // Try wav file first, fall back to synth
-            if (soundBuffers[name]) {
-                try {
-                    const source = audioCtx.createBufferSource();
-                    const gain = audioCtx.createGain();
-                    source.buffer = soundBuffers[name];
-                    gain.gain.value = fileVolumes[name] || 0.2;
-                    source.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    source.start(0);
-                    // Haptics even for file-based sounds
-                    const def = soundDefs[name];
-                    if (def && def.haptic) haptic(def.haptic);
-                    return;
-                } catch(e) {}
-            }
-            // Synth fallback
+            // Use synth sounds with throttling and haptics
             const def = soundDefs[name];
             if (def) { try { def(); } catch(e) {} }
         }
@@ -822,7 +770,7 @@
             }
         }
         
-        // NEW: GroundFlame class for persistent ground flames
+        // GroundFlame class for persistent ground flames
         class GroundFlame {
             constructor(x, y) {
                 this.x = x;
@@ -858,112 +806,9 @@
             }
         }
         
-        // NEW: FloatingText class for score numbers
-        class FloatingText {
-            constructor(x, y, text, color = '#ffffff') {
-                this.x = x;
-                this.y = y;
-                this.startY = y;
-                this.text = text;
-                this.color = color;
-                this.life = 60; // 1 second at 60fps
-                this.maxLife = 60;
-            }
-            
-            update() {
-                this.y = this.startY - (60 - this.life) * 1.5; // Rise upward
-                this.life--;
-                return this.life <= 0;
-            }
-            
-            draw() {
-                const alpha = this.life / this.maxLife;
-                ctx.save();
-                ctx.globalAlpha = alpha;
-                ctx.font = 'bold 18px Arial';
-                ctx.textAlign = 'center';
-                
-                // Black outline for readability
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 3;
-                ctx.strokeText(this.text, this.x, this.y);
-                
-                // White text
-                ctx.fillStyle = this.color;
-                ctx.fillText(this.text, this.x, this.y);
-                ctx.restore();
-            }
-        }
+
         
-        // NEW: StreakCallout class for kill streak messages
-        class StreakCallout {
-            constructor(text, color) {
-                this.text = text;
-                this.color = color;
-                this.scale = 2.0;
-                this.alpha = 1.0;
-                this.phase = 'shrink'; // shrink -> hold -> fade
-                this.timer = 0;
-            }
-            
-            update() {
-                this.timer++;
-                
-                if (this.phase === 'shrink') {
-                    // Shrink from 2.0 to 1.0 over 18 frames (0.3s)
-                    if (this.timer <= 18) {
-                        this.scale = 2.0 - (this.timer / 18);
-                    } else {
-                        this.scale = 1.0;
-                        this.phase = 'hold';
-                        this.timer = 0;
-                    }
-                } else if (this.phase === 'hold') {
-                    // Hold for 60 frames (1s)
-                    if (this.timer >= 60) {
-                        this.phase = 'fade';
-                        this.timer = 0;
-                    }
-                } else if (this.phase === 'fade') {
-                    // Fade out over 30 frames (0.5s)
-                    if (this.timer <= 30) {
-                        this.alpha = 1.0 - (this.timer / 30);
-                    } else {
-                        return true; // Remove this callout
-                    }
-                }
-                
-                return false;
-            }
-            
-            draw() {
-                ctx.save();
-                ctx.globalAlpha = this.alpha;
-                ctx.font = `bold ${Math.floor(48 * this.scale)}px Arial`;
-                ctx.textAlign = 'center';
-                
-                // Thick shadow
-                ctx.shadowBlur = 5;
-                ctx.shadowColor = '#000000';
-                ctx.shadowOffsetX = 3;
-                ctx.shadowOffsetY = 3;
-                
-                // Black outline
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 4;
-                ctx.strokeText(this.text, canvas.width / 2, canvas.height / 2);
-                
-                // Colored text
-                ctx.fillStyle = this.color;
-                ctx.fillText(this.text, canvas.width / 2, canvas.height / 2);
-                
-                // Reset shadow
-                ctx.shadowBlur = 0;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-                ctx.restore();
-            }
-        }
+
         
         // Player class
         class Player {
@@ -1124,7 +969,7 @@
                 projectiles.push(new LaserBeam(eyeX - perpX, eyeY - perpY, angle, 14, damage, '#ff2200', 0));
                 playSound('laser-shoot');
                 
-                // NEW: Micro screen shake on shooting
+                // Micro screen shake on shooting
                 screenShake = 1;
                 
                 // Duck power-up: Show "QUACK!" text particles instead of normal effects
@@ -1186,9 +1031,6 @@
                 
                 this.health--;
                 screenShake = 10;
-                
-                // NEW: Reset kill streak when player takes damage
-                killStreak = 0;
                 
                 // Pixel splatter on hit — permanent like trails
                 for (let i = 0; i < 30; i++) {
@@ -1330,14 +1172,14 @@
                 this.angle = 0;
                 this.currentDirection = 'east'; // Track current facing direction
                 
-                // NEW: Hit feedback properties
+                // Hit feedback properties
                 this.hitFlash = 0; // Hit flash effect
                 this.knockbackX = 0; // Knockback velocity X
                 this.knockbackY = 0; // Knockback velocity Y
             }
             
             update() {
-                // NEW: Apply knockback physics
+                // Apply knockback physics
                 if (this.knockbackX !== 0 || this.knockbackY !== 0) {
                     this.x += this.knockbackX;
                     this.y += this.knockbackY;
@@ -1347,7 +1189,7 @@
                     if (Math.abs(this.knockbackY) < 0.1) this.knockbackY = 0;
                 }
                 
-                // NEW: Update hit flash
+                // Update hit flash
                 if (this.hitFlash > 0) {
                     this.hitFlash--;
                 }
@@ -1434,10 +1276,10 @@
                 this.health -= damage;
                 playSound('enemy-hit');
                 
-                // NEW: Hit flash effect
+                // Hit flash effect
                 this.hitFlash = 3;
                 
-                // NEW: Knockback from projectile
+                // Knockback from projectile
                 if (projectileAngle !== null) {
                     const knockbackForce = 8;
                     this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
@@ -1472,7 +1314,7 @@
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = 'rgba(255,255,255,0.7)';
                 
-                // NEW: Hit flash effect
+                // Hit flash effect
                 if (this.hitFlash > 0) {
                     ctx.filter = 'brightness(3)';
                 }
@@ -1684,21 +1526,10 @@
                         this.createChromieWave();
                         break;
                     case 'crown':
-                        // Instant: +500 score with combo multiplier
+                        // Instant: +500 score
                         playSound('crown-collect');
-                        const crownPoints = 500 * comboMultiplier * (playerBuffs.diamond > 0 ? 2 : 1);
+                        const crownPoints = 500 * (playerBuffs.diamond > 0 ? 2 : 1);
                         score += crownPoints;
-                        
-                        // NEW: Add floating text for crown pickup
-                        let crownText = "+500";
-                        if (comboMultiplier > 1) {
-                            crownText += ` x${comboMultiplier}`;
-                        }
-                        if (playerBuffs.diamond > 0) {
-                            crownText += ` x2`;
-                        }
-                        floatingTexts.push(new FloatingText(this.x, this.y, crownText, '#ffd700'));
-                        
                         this.createCrownBurst();
                         break;
                     case 'diamond':
@@ -1921,16 +1752,9 @@
                 return;
             }
             
-            // NEW: Kill slowmo effect
-            if (slowMoFrames > 0) {
-                slowMoFrames--;
-                if (slowMoFrames % 2 === 1) {
-                    // Skip every other update frame during slowmo
-                    return;
-                }
-            }
+
             
-            // NEW: Update game time and progressive difficulty
+            // Update game time and progressive difficulty
             gameTime = (Date.now() - gameStartTime) / 1000;
             
             // Every 15 seconds: decrease spawn delay (min 400ms)
@@ -1949,29 +1773,7 @@
                 maxEnemiesOnScreen = Math.min(30, maxEnemiesOnScreen + 2);
             }
             
-            // NEW: Update combo system
-            if (comboCount > 0 && Date.now() - lastKillTime > 2000) {
-                // Combo expired - reset
-                comboCount = 0;
-                comboMultiplier = 1;
-                comboDisplay.active = false;
-            }
-            
-            // NEW: Update floating texts
-            floatingTexts = floatingTexts.filter(text => !text.update());
-            
-            // NEW: Update streak callouts
-            streakCallouts = streakCallouts.filter(callout => !callout.update());
-            
-            // NEW: Update combo display
-            if (comboDisplay.active) {
-                if (comboDisplay.pulseTime > 0) {
-                    comboDisplay.pulseTime--;
-                    comboDisplay.scale = 1.0 + Math.sin(comboDisplay.pulseTime * 0.5) * 0.3;
-                } else {
-                    comboDisplay.scale = 1.0;
-                }
-            }
+
             
             // Wave-based spawning with breathing room
             const currentTime = Date.now();
@@ -2052,7 +1854,7 @@
                     const dx = proj.x - enemy.x;
                     const dy = proj.y - enemy.y;
                     if (dx * dx + dy * dy < (enemy.size * enemy.size)) {
-                        // NEW: Pass projectile angle for knockback
+                        // Pass projectile angle for knockback
                         const projAngle = Math.atan2(proj.vy, proj.vx);
                         if (enemy.takeDamage(proj.damage, projAngle)) {
                             // Enemy killed - tier-based scoring
@@ -2062,58 +1864,9 @@
                             else if (enemy.tier === 4) basePoints = 500;
                             else if (enemy.tier === 5) basePoints = 1000;
                             
-                            // NEW: Apply combo multiplier
-                            const points = basePoints * comboMultiplier * (playerBuffs.diamond > 0 ? 2 : 1);
+                            // Apply diamond doubling only
+                            const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                             score += points;
-                            
-                            // NEW: Update combo system
-                            comboCount++;
-                            lastKillTime = Date.now();
-                            comboMultiplier = Math.min(comboCount, 8);
-                            
-                            // NEW: Update combo display
-                            if (comboMultiplier > 1) {
-                                comboDisplay.active = true;
-                                comboDisplay.text = `x${comboMultiplier}`;
-                                comboDisplay.pulseTime = 20; // Pulse for 20 frames
-                                comboDisplay.alpha = 1;
-                            }
-                            
-                            // NEW: Add floating score text
-                            let floatingText = `+${basePoints}`;
-                            if (comboMultiplier > 1) {
-                                floatingText += ` x${comboMultiplier}`;
-                            }
-                            if (playerBuffs.diamond > 0 && comboMultiplier > 1) {
-                                floatingText += ` x2`; // Show both multipliers
-                            } else if (playerBuffs.diamond > 0) {
-                                floatingText += ` x2`;
-                            }
-                            floatingTexts.push(new FloatingText(enemy.x, enemy.y, floatingText));
-                            
-                            // NEW: Update kill counter and streak
-                            kills++;
-                            killStreak++;
-                            
-                            // NEW: Check for streak callouts
-                            if (killStreak === 5) {
-                                playSound('rampage-stinger');
-                                streakCallouts.push(new StreakCallout("RAMPAGE", "#ff4400"));
-                            } else if (killStreak === 10) {
-                                playSound('unstoppable-stinger');
-                                streakCallouts.push(new StreakCallout("UNSTOPPABLE", "#ff00ff"));
-                            } else if (killStreak === 15) {
-                                playSound('godlike-stinger');
-                                streakCallouts.push(new StreakCallout("GODLIKE", "#ffd700"));
-                            } else if (killStreak === 20) {
-                                playSound('legendary-stinger');
-                                streakCallouts.push(new StreakCallout("LEGENDARY", "#00ffff"));
-                            }
-                            
-                            // NEW: Kill slowmo for Tier 3+ enemies
-                            if (enemy.tier >= 3) {
-                                slowMoFrames = 4;
-                            }
                             
                             // Colorful pixel death explosion
                             if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -2146,58 +1899,9 @@
                         else if (enemy.tier === 4) basePoints = 500;
                         else if (enemy.tier === 5) basePoints = 1000;
                         
-                        // NEW: Apply combo multiplier
-                        const points = basePoints * comboMultiplier * (playerBuffs.diamond > 0 ? 2 : 1);
+                        // Apply diamond doubling only
+                        const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                         score += points;
-                        
-                        // NEW: Update combo system
-                        comboCount++;
-                        lastKillTime = Date.now();
-                        comboMultiplier = Math.min(comboCount, 8);
-                        
-                        // NEW: Update combo display
-                        if (comboMultiplier > 1) {
-                            comboDisplay.active = true;
-                            comboDisplay.text = `x${comboMultiplier}`;
-                            comboDisplay.pulseTime = 20;
-                            comboDisplay.alpha = 1;
-                        }
-                        
-                        // NEW: Add floating score text
-                        let floatingText = `+${basePoints}`;
-                        if (comboMultiplier > 1) {
-                            floatingText += ` x${comboMultiplier}`;
-                        }
-                        if (playerBuffs.diamond > 0 && comboMultiplier > 1) {
-                            floatingText += ` x2`;
-                        } else if (playerBuffs.diamond > 0) {
-                            floatingText += ` x2`;
-                        }
-                        floatingTexts.push(new FloatingText(enemy.x, enemy.y, floatingText));
-                        
-                        // NEW: Update kill counter and streak
-                        kills++;
-                        killStreak++;
-                        
-                        // NEW: Check for streak callouts
-                        if (killStreak === 5) {
-                            playSound('rampage-stinger');
-                            streakCallouts.push(new StreakCallout("RAMPAGE", "#ff4400"));
-                        } else if (killStreak === 10) {
-                            playSound('unstoppable-stinger');
-                            streakCallouts.push(new StreakCallout("UNSTOPPABLE", "#ff00ff"));
-                        } else if (killStreak === 15) {
-                            playSound('godlike-stinger');
-                            streakCallouts.push(new StreakCallout("GODLIKE", "#ffd700"));
-                        } else if (killStreak === 20) {
-                            playSound('legendary-stinger');
-                            streakCallouts.push(new StreakCallout("LEGENDARY", "#00ffff"));
-                        }
-                        
-                        // NEW: Kill slowmo for Tier 3+ enemies
-                        if (enemy.tier >= 3) {
-                            slowMoFrames = 4;
-                        }
                         
                         // Colorful pixel death explosion
                         if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -2309,7 +2013,6 @@
                     if (gameState !== 'dying') return;
                     gameState = 'gameOver';
                     gameOverTime = Date.now();
-                    finalKills = kills;
                     playSound('game-over');
                 }, totalDeathTime);
             }
@@ -2486,12 +2189,7 @@
                 // Draw UI
                 drawUI();
                 
-                // Combo display removed for clean art look
-                
-                // NEW: Draw streak callouts
-                // streakCallouts disabled for clean look
-                
-                // Kill counter removed for clean art look
+                // UI elements removed for clean art look
                 
                 // Test mode indicator removed for polish
                 // if (testMode) {
@@ -2583,7 +2281,6 @@
         let currentDeathMessage = '';
         let capturedArt = null;
         let canvasCoverage = 0;
-        let finalKills = 0;
         let gameOverTime = 0;
         let saveButtonY = 0;
         let saveButtonRect = null;
@@ -2666,14 +2363,11 @@
             ctx.fillStyle = '#111111';
             ctx.fillText(`${canvasCoverage}% canvas covered`, cx, bottomY + 34);
             
-            // Birds popped
-            ctx.font = '14px Arial';
-            ctx.fillStyle = '#888888';
-            ctx.fillText(`${finalKills} birds popped`, cx, bottomY + 56);
+
             
             // Save button
             if (elapsed > 2) {
-                const btnY = bottomY + 72;
+                const btnY = bottomY + 62;
                 const btnW = 150, btnH = 36;
                 saveButtonRect = { x: cx - btnW / 2, y: btnY, w: btnW, h: btnH };
                 
@@ -2692,7 +2386,7 @@
                 ctx.globalAlpha = contentAlpha * pulse;
                 ctx.font = '13px Arial';
                 ctx.fillStyle = '#bbbbbb';
-                ctx.fillText('tap to paint again', cx, bottomY + 135);
+                ctx.fillText('tap to paint again', cx, bottomY + 125);
             }
             
             ctx.restore();
@@ -2948,7 +2642,6 @@
             currentDeathMessage = '';
             capturedArt = null;
             canvasCoverage = 0;
-            finalKills = 0;
             saveButtonRect = null;
             chromeDrops = [];
             dyingDriftPixels = [];
@@ -2961,20 +2654,11 @@
             score = 0;
             lives = 3;
             
-            // NEW: Reset juice variables
+            // Reset game variables
             gameStartTime = Date.now();
             gameTime = 0;
-            kills = 0;
-            killStreak = 0;
-            comboCount = 0;
-            lastKillTime = 0;
-            comboMultiplier = 1;
-            slowMoFrames = 0;
             enemySpeedMultiplier = 1;
             playerSpeedBonus = 0;
-            floatingTexts = [];
-            streakCallouts = [];
-            comboDisplay = { active: false, text: '', scale: 1, alpha: 1, pulseTime: 0 };
             
             // Reset player
             player = new Player(canvas.width / 2, canvas.height / 2);
