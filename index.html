@@ -5,24 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>Death Paint</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100dvh;
             background: #ffffff;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+        body {
             display: flex;
             justify-content: center;
-            align-items: center;
-            min-height: 100dvh;
-            height: 100dvh;
-            font-family: 'Courier New', monospace;
-            overflow: hidden;
+            align-items: flex-start;
         }
         canvas {
-            border: 2px solid #cccccc;
+            display: block;
             background: #ffffff;
             image-rendering: pixelated;
         }
-        /* Mobile controls removed - whole screen is now control surface */
+        /* Desktop: add subtle border */
+        @media (min-width: 769px) {
+            body { align-items: center; }
+            canvas { border: 2px solid #cccccc; }
+        }
     </style>
 </head>
 <body>
@@ -46,13 +51,17 @@
         function resizeCanvas() {
             const vp = getViewportSize();
             if (vp.w <= 768) {
-                // Mobile: use visible viewport (not hidden behind address bar)
+                // Mobile: fill entire visible viewport, no gaps
                 canvas.width = vp.w;
                 canvas.height = vp.h;
+                canvas.style.width = vp.w + 'px';
+                canvas.style.height = vp.h + 'px';
             } else {
                 // Desktop: maintain aspect ratio with padding
                 canvas.width = Math.min(1024, vp.w - 40);
                 canvas.height = Math.min(768, vp.h - 40);
+                canvas.style.width = '';
+                canvas.style.height = '';
             }
         }
         
