@@ -2393,12 +2393,12 @@
                             fireTrails.push(t);
                         }
                         if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
-                        // Descending chime — beautiful bell tone per enemy
+                        // Descending chime — clear bell tone per enemy
                         const deathNote = deathScale[idx % deathScale.length];
-                        synthTone(deathNote, 0.5, 0.12, 'sine');          // main bell
-                        synthTone(deathNote * 0.5, 0.4, 0.08, 'sine');   // warm octave below
-                        synthTone(deathNote * 2, 0.3, 0.04, 'sine');     // shimmer above
-                        synthTone(deathNote * 1.5, 0.35, 0.03, 'sine'); // fifth harmonic — richness
+                        synthTone(deathNote, 0.6, 0.25, 'sine');          // main bell — LOUD
+                        synthTone(deathNote * 0.5, 0.5, 0.15, 'sine');   // warm octave below
+                        synthTone(deathNote * 2, 0.35, 0.1, 'sine');     // shimmer above
+                        synthTone(deathNote * 1.5, 0.4, 0.07, 'sine');  // fifth harmonic — richness
                         haptic(12);
                         // Drift pixels — scaled by proximity
                         const driftCount = Math.floor(50 * scale);
