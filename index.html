@@ -134,13 +134,11 @@
         let gameTime = 0; // Game time in seconds for progressive difficulty
         let gameStartTime = 0; // Track when game started
         
-        // Chrome power-up system
-        let chromeDrops = []; // Active chrome pickups on screen
+        // Rainbow tracer system
         let rainbowActive = false; // Player has rainbow tracer
         let rainbowTimer = 0; // Frames remaining
         let rainbowHue = 0; // Cycling hue
         const RAINBOW_DURATION = 600; // ~10 seconds at 60fps
-        let lastChromeDrop = 0; // Timestamp of last drop
         let enemySpeedMultiplier = 1; // Progressive difficulty
         let playerSpeedBonus = 0; // Progressive player speed
         
@@ -2232,7 +2230,6 @@
                 enemies = [];
             }
 
-            // Capture art when entering gameOver (after death sequence)
         function captureArt() {
                 const artScale = 4;
                 const artCanvas = document.createElement('canvas');
@@ -2391,26 +2388,6 @@
                     });
                 }
                 
-                // Draw chrome drops (squiggle icon)
-                chromeDrops.forEach(drop => {
-                    ctx.save();
-                    const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
-                    const sz = drop.size * 2 * pulse;
-                    // Rainbow glow behind icon
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = `hsl(${drop.hue}, 100%, 60%)`;
-                    if (sprites.chromieIcon && sprites.chromieIcon.complete) {
-                        ctx.drawImage(sprites.chromieIcon, drop.x - sz/2, drop.y - sz/2, sz, sz);
-                    } else {
-                        // Fallback circle
-                        ctx.beginPath();
-                        ctx.arc(drop.x, drop.y, drop.size * pulse, 0, Math.PI * 2);
-                        ctx.fillStyle = `hsl(${drop.hue}, 100%, 50%)`;
-                        ctx.fill();
-                    }
-                    ctx.shadowBlur = 0;
-                    ctx.restore();
-                });
                 player.draw();
                 
                 // Aim indicator removed — lasers are the feedback
@@ -2648,14 +2625,12 @@
             "Moonbird Opus ", "Digital Jackson ", "Fragments ", "Drift "
         ];
         let currentArtTitle = '';
-        let currentDeathMessage = '';
         let capturedArt = null;
         let canvasCoverage = 0;
         let gameOverTime = 0;
         let saveButtonY = 0;
         let saveButtonRect = null;
         let hangButtonRect = null;
-        let hangMode = false; // When true, show art in gallery frame view
         let galleryReturnState = null; // State to return to after gallery
         
         function hangArtMidGame() {
@@ -3264,7 +3239,6 @@
                         if (cx >= hangButtonRect.x && cx <= hangButtonRect.x + hangButtonRect.w &&
                             cy >= hangButtonRect.y && cy <= hangButtonRect.y + hangButtonRect.h) {
                             gameState = galleryReturnState || 'playing';
-                            hangMode = false;
                             playSound('menu-tap');
                             return;
                         }
@@ -3296,10 +3270,8 @@
         
         function startGame() {
             currentArtTitle = '';
-            currentDeathMessage = '';
             capturedArt = null;
             canvasCoverage = 0;
-            hangMode = false;
             gamePaused = false;
             streakCount = 0;
             streakPure = true;
@@ -3308,12 +3280,10 @@
             paintRainTimer = 0;
             soundDefs._killNote = 0; // Reset musical kill scale
             saveButtonRect = null;
-            chromeDrops = [];
             dyingDriftPixels = [];
             dyingEnemiesExploded = false;
             rainbowActive = false;
             rainbowTimer = 0;
-            lastChromeDrop = Date.now();
             gameState = 'playing';
             startMusic();
             score = 0;
