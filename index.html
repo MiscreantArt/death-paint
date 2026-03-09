@@ -14,20 +14,17 @@
             font-family: 'Courier New', monospace;
         }
         body {
+            background: #000;
             display: flex;
             justify-content: center;
-            align-items: flex-start;
+            align-items: center;
         }
         canvas {
             display: block;
             background: #ffffff;
             image-rendering: pixelated;
         }
-        /* Desktop: add subtle border */
-        @media (min-width: 769px) {
-            body { align-items: center; }
-            canvas { border: 2px solid #cccccc; }
-        }
+
     </style>
 </head>
 <body>
@@ -48,21 +45,28 @@
             }
             return { w: window.innerWidth, h: window.innerHeight };
         }
+        let isDesktop = false;
         function resizeCanvas() {
             const vp = getViewportSize();
-            if (vp.w <= 768) {
-                // Mobile: fill entire visible viewport, no gaps
-                canvas.width = vp.w;
-                canvas.height = vp.h;
-                canvas.style.width = vp.w + 'px';
-                canvas.style.height = vp.h + 'px';
-            } else {
-                // Desktop: maintain aspect ratio with padding
-                canvas.width = Math.min(1024, vp.w - 40);
-                canvas.height = Math.min(768, vp.h - 40);
-                canvas.style.width = '';
-                canvas.style.height = '';
+            if (vp.w > 768) {
+                isDesktop = true;
+                canvas.width = 400;
+                canvas.height = 711;
+                return;
             }
+            isDesktop = false;
+            // 9:16 aspect ratio locked
+            const targetRatio = 9 / 16;
+            let h = vp.h;
+            let w = h * targetRatio;
+            if (w > vp.w) {
+                w = vp.w;
+                h = w / targetRatio;
+            }
+            canvas.width = Math.round(w);
+            canvas.height = Math.round(h);
+            canvas.style.width = canvas.width + 'px';
+            canvas.style.height = canvas.height + 'px';
         }
         
         resizeCanvas();
@@ -197,6 +201,9 @@
         let paintCanvas = null;
         let paintCtx = null;
         let stars = [];
+        
+        // Delta time for frame-rate independence
+        let frameDt = 0;
         
         // ===== SOUND SYSTEM (Synthesized — musical & pleasing) =====
         let audioCtx = null;
@@ -881,11 +888,11 @@
             }
             
             update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.life--;
-                this.vx *= 0.99;
-                this.vy *= 0.99;
+                this.x += this.vx * frameDt * 60;
+                this.y += this.vy * frameDt * 60;
+                this.life -= frameDt * 60;
+                this.vx *= Math.pow(0.99, frameDt * 60);
+                this.vy *= Math.pow(0.99, frameDt * 60);
             }
             
             draw() {
@@ -915,8 +922,8 @@
             }
             
             update() {
-                this.y += this.vy;
-                this.life--;
+                this.y += this.vy * frameDt * 60;
+                this.life -= frameDt * 60;
             }
             
             draw() {
@@ -1003,8 +1010,8 @@
                     }
                     
                     const speed = this.speed + playerSpeedBonus;
-                    this.x += dx * speed;
-                    this.y += dy * speed;
+                    this.x += dx * speed * frameDt * 60;
+                    this.y += dy * speed * frameDt * 60;
                     
                     // Keep player in bounds
                     this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
@@ -1053,8 +1060,8 @@
                 }
                 
                 // Animation
-                this.animTime++;
-                if (this.animTime % 8 === 0) {
+                this.animTime += frameDt * 60;
+                if (Math.floor(this.animTime / 8) !== Math.floor((this.animTime - frameDt * 60) / 8)) {
                     this.animFrame = (this.animFrame + 1) % 6;
                 }
                 
@@ -1339,17 +1346,18 @@
             update() {
                 // Apply knockback physics
                 if (this.knockbackX !== 0 || this.knockbackY !== 0) {
-                    this.x += this.knockbackX;
-                    this.y += this.knockbackY;
-                    this.knockbackX *= 0.8; // Decay knockback
-                    this.knockbackY *= 0.8;
+                    this.x += this.knockbackX * frameDt * 60;
+                    this.y += this.knockbackY * frameDt * 60;
+                    this.knockbackX *= Math.pow(0.8, frameDt * 60); // Decay knockback
+                    this.knockbackY *= Math.pow(0.8, frameDt * 60);
                     if (Math.abs(this.knockbackX) < 0.1) this.knockbackX = 0;
                     if (Math.abs(this.knockbackY) < 0.1) this.knockbackY = 0;
                 }
                 
                 // Update hit flash
                 if (this.hitFlash > 0) {
-                    this.hitFlash--;
+                    this.hitFlash -= frameDt * 60;
+                    if (this.hitFlash < 0) this.hitFlash = 0;
                 }
                 
                 // Move toward player — with trait-based personality
@@ -1361,8 +1369,8 @@
                 if (dist > 0) {
                     // Apply progressive difficulty
                     const finalSpeed = this.speed * enemySpeedMultiplier;
-                    this.x += (dx / dist) * finalSpeed;
-                    this.y += (dy / dist) * finalSpeed;
+                    this.x += (dx / dist) * finalSpeed * frameDt * 60;
+                    this.y += (dy / dist) * finalSpeed * frameDt * 60;
                     this.angle = Math.atan2(dy, dx);
                     
                     // Update facing direction toward player
@@ -1370,7 +1378,7 @@
                     
                     // Drop permanent color pixels — builds up like Jackson Pollock (not for bosses)
                     // Reduced: 1 pixel every 4 frames to prevent canvas saturation
-                    if (!this.isBoss && Math.random() < 0.25) {
+                    if (!this.isBoss && Math.random() < 0.25 * frameDt * 60) {
                         fireTrails.push(new FireTrail(
                             this.x + (Math.random() - 0.5) * 30,
                             this.y + (Math.random() - 0.5) * 20,
@@ -1382,8 +1390,8 @@
                 }
                 
                 // Animation — fast legs to match speed
-                this.animTime++;
-                if (this.animTime % 4 === 0) {
+                this.animTime += frameDt * 60;
+                if (Math.floor(this.animTime / 4) !== Math.floor((this.animTime - frameDt * 60) / 4)) {
                     this.animFrame = (this.animFrame + 1) % 6;
                 }
                 
@@ -1493,14 +1501,14 @@
             }
             
             update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.life--;
-                this.animTime++;
-                if (this.animTime % 10 === 0) {
+                this.x += this.vx * frameDt * 60;
+                this.y += this.vy * frameDt * 60;
+                this.life -= frameDt * 60;
+                this.animTime += frameDt * 60;
+                if (Math.floor(this.animTime / 10) !== Math.floor((this.animTime - frameDt * 60) / 10)) {
                     this.animFrame = (this.animFrame + 1) % 6;
                 }
-                this.bounce += 0.3; // Bobbing motion
+                this.bounce += 0.3 * frameDt * 60; // Bobbing motion
                 
                 return this.life <= 0 || 
                        this.x < 0 || this.x > canvas.width ||
@@ -1539,10 +1547,10 @@
             }
             
             update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.life--;
-                this.age++;
+                this.x += this.vx * frameDt * 60;
+                this.y += this.vy * frameDt * 60;
+                this.life -= frameDt * 60;
+                this.age += frameDt * 60;
                 
                 // Duck projectiles leave a subtle yellow paint trail
                 if (this.isDuck && Math.random() < 0.35) {
@@ -1658,8 +1666,8 @@
             }
             
             update() {
-                this.bounce += 0.1;
-                this.life--;
+                this.bounce += 0.1 * frameDt * 60;
+                this.life -= frameDt * 60;
                 
                 // Check collision with player
                 const dx = this.x - player.x;
@@ -1808,7 +1816,10 @@
         }
         
         // Update game logic
-        function update() {
+        function update(dt) {
+            // Store delta time globally for class methods
+            frameDt = dt;
+            
             // Capture art on first frame of gameOver
             if (gameState === 'gameOver' && !capturedArt) {
                 captureArt();
@@ -1818,12 +1829,12 @@
             if (gameState === 'dying') {
                 // Only update drift pixels during death sequence
                 dyingDriftPixels = dyingDriftPixels.filter(p => {
-                    p.x += p.vx;
-                    p.y += p.vy;
+                    p.x += p.vx * frameDt * 60;
+                    p.y += p.vy * frameDt * 60;
                     const d = p.decay || 0.98;
-                    p.vx *= d;
-                    p.vy *= d;
-                    p.life--;
+                    p.vx *= Math.pow(d, frameDt * 60);
+                    p.vy *= Math.pow(d, frameDt * 60);
+                    p.life -= frameDt * 60;
                     if (p.life > 0) {
                         // Main pixel in its committed color
                         const t = new FireTrail(p.x, p.y);
@@ -1851,8 +1862,8 @@
             // Update game time and progressive difficulty
             gameTime = (Date.now() - gameStartTime) / 1000;
             
-            // Tick down time-based buffs (~16ms per frame at 60fps)
-            const buffDt = 16.67;
+            // Tick down time-based buffs 
+            const buffDt = frameDt * 1000; // dt is in seconds, buffs are in ms
             if (playerBuffs.duck > 0) {
                 playerBuffs.duck -= buffDt;
                 if (playerBuffs.duck <= 0) {
@@ -1896,8 +1907,8 @@
             
             // Rainbow tracer — tight line trail behind player (not spray)
             if (rainbowActive) {
-                rainbowTimer--;
-                rainbowHue = (rainbowHue + 4) % 360;
+                rainbowTimer -= frameDt * 60;
+                rainbowHue = (rainbowHue + 4 * frameDt * 60) % 360;
                 // Drop thick line trail directly behind player
                 for (let i = 0; i < 3; i++) {
                     const t = new FireTrail(player.x, player.y);
@@ -1928,6 +1939,12 @@
                 particle.update();
                 return particle.life > 0;
             });
+            
+            // Update UI timers
+            if (zoneLabelsVisible > 0) {
+                zoneLabelsVisible -= frameDt * 60;
+                if (zoneLabelsVisible < 0) zoneLabelsVisible = 0;
+            }
             
             // Trails are permanent art — no damage from them
             
@@ -2261,14 +2278,15 @@
             
             // Update screen shake
             if (screenShake > 0) {
-                screenShake--;
+                screenShake -= frameDt * 60;
+                if (screenShake < 0) screenShake = 0;
             }
             
             // Update paint rain
             if (paintRainActive) {
                 // Spawn drops only during the initial burst
                 if (paintRainTimer > 0) {
-                    paintRainTimer--;
+                    paintRainTimer -= frameDt * 60;
                     for (let i = 0; i < 6; i++) {
                         // Each drop stops at a random Y — anywhere on the canvas
                         const stopY = TOOLBAR_H + 5 + Math.random() * (canvas.height - TOOLBAR_H - 10);
@@ -2285,8 +2303,8 @@
                 }
                 // Update drops — they fall and affix to background at their stop point
                 paintRainDrops = paintRainDrops.filter(d => {
-                    d.x += d.vx;
-                    d.y += d.vy;
+                    d.x += d.vx * frameDt * 60;
+                    d.y += d.vy * frameDt * 60;
                     // Reached stop point — affix to paint canvas
                     if (d.y >= d.stopY) {
                         if (paintCtx) {
@@ -2318,6 +2336,17 @@
             // Clear screen with dark background
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Desktop message
+            if (isDesktop && gameState === 'playing') {
+                ctx.font = '20px Arial';
+                ctx.fillStyle = '#333333';
+                ctx.textAlign = 'center';
+                ctx.fillText('Death Paint is built for phones.', canvas.width/2, canvas.height/2 - 10);
+                ctx.fillText('Visit on mobile!', canvas.width/2, canvas.height/2 + 20);
+                ctx.restore();
+                return;
+            }
             
             if (gameState === 'menu') {
                 drawMenu();
@@ -2477,7 +2506,7 @@
                     
                     ctx.globalAlpha = 1;
                     ctx.restore();
-                    tutorialOverlay--;
+                    tutorialOverlay -= frameDt * 60;
                 }
             } else if (gameState === 'dying') {
                 // Keep showing the canvas with paint during death sequence
@@ -2980,7 +3009,7 @@
         // Draw split-screen zone indicators
         function drawZoneIndicators() {
             // Only show on mobile screens and when playing
-            if (window.innerWidth > 768 || gameState !== 'playing') return;
+            if (isDesktop || gameState !== 'playing') return;
             
             ctx.save();
             
@@ -3346,9 +3375,14 @@
         }
         
         // Main game loop
-        function gameLoop() {
+        let lastFrameTime = 0;
+        function gameLoop(timestamp) {
+            if (!lastFrameTime) lastFrameTime = timestamp;
+            const rawDt = (timestamp - lastFrameTime) / 1000; // seconds
+            const dt = Math.min(rawDt, 0.05); // cap at 50ms to prevent spiral
+            lastFrameTime = timestamp;
             try {
-                update();
+                update(dt);
                 draw();
             } catch(e) {
                 ctx.fillStyle = 'red';
@@ -3382,7 +3416,7 @@
             mouse.x = canvas.width / 2;
             mouse.y = canvas.height / 2;
             
-            gameLoop();
+            requestAnimationFrame(gameLoop);
         }
         
         init();
