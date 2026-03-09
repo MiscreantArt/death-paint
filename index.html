@@ -91,14 +91,17 @@
                 // Grunt kill — counts toward streak
                 streakCount++;
             } else {
-                // Non-grunt killed — streak is no longer pure
-                streakPure = false;
+                // Non-grunt killed — reset everything back to first note
+                streakCount = 0;
+                streakPure = true;
+                soundDefs._killNote = 0;
             }
-            // Paint rain: 10 grunts killed without killing any other type first
+            // Paint rain: 10 grunts killed without killing any other type
             if (streakCount >= 10 && streakPure && !paintRainActive) {
                 triggerPaintRain();
                 streakCount = 0;
                 streakPure = true;
+                soundDefs._killNote = 0;
             }
         }
         
@@ -2066,6 +2069,7 @@
                         player.takeDamage();
                         streakCount = 0; // Reset kill streak on damage
                         streakPure = true;
+                        soundDefs._killNote = 0; // Reset chime to first note
                         // Push enemy away
                         const length = Math.sqrt(distSq);
                         if (length > 0) {
