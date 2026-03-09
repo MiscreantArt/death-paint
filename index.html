@@ -2139,10 +2139,9 @@
                             playSound('kill-sound');
                             
                             // Power-up drop: ~12% per kill, but not during intro and not before 10s
-                            // No drops while any power-up is active
+                            // Drop ~once every 12 kills, not during intro or active power-up
                             const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || rainbowActive;
-                            const guaranteedDrop = killCount > 0 && killCount % 10 === 0; // Every 10 kills
-                            if (!anyBuffActive && introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && (guaranteedDrop || Math.random() < 0.10)) {
+                            if (!anyBuffActive && introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.08) {
                                 const dropTypes = ['duck', 'skully', 'chromie'];
                                 const dropType = dropTypes[Math.floor(Math.random() * 3)];
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
