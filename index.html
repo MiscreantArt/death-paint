@@ -1199,7 +1199,7 @@
                     // DUCK MODE — shoot duck crops with quack
                     // Pick duck emoji based on direction
                     const duckEmojis = { east: '🦆', west: '🦆', north: '🦆', south: '🦆' };
-                    const duckProj = new LaserBeam(eyeX, eyeY, angle, 10, damage, '#ffdd00', 0);
+                    const duckProj = new LaserBeam(eyeX, eyeY + this.size * 0.3, angle, 10, damage, '#ffdd00', 0);
                     duckProj.isDuck = true;
                     duckProj.duckDir = this.currentDirection;
                     projectiles.push(duckProj);
