@@ -2142,8 +2142,8 @@
                             // No drops while any power-up is active
                             const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || rainbowActive;
                             if (!anyBuffActive && introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.10) {
-                                const r = Math.random();
-                                const dropType = r < 0.40 ? 'duck' : r < 0.80 ? 'skully' : 'chromie'; // chromie rarest (20%)
+                                const dropTypes = ['duck', 'skully', 'chromie'];
+                                const dropType = dropTypes[Math.floor(Math.random() * 3)];
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
                             }
