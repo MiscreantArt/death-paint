@@ -664,29 +664,29 @@
                     15 + Math.floor(Math.random() * 20), 0.5 + Math.random() * 1.2
                 ));
             }
-            // Green paint bomb — bigger than grunt, more green
+            // Green paint bomb — bigger than grunt, more green (+10% size)
             // Dense green core
-            for (let i = 0; i < 160; i++) {
+            for (let i = 0; i < 180; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = Math.random() * 35;
+                const dist = Math.random() * 38;
                 const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
                 t.size = 2.5 + Math.random() * 2.5;
                 t.color = greenColors[Math.floor(Math.random() * greenColors.length)];
                 fireTrails.push(t);
             }
             // Medium green mid
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 110; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = 25 + Math.random() * 55;
+                const dist = 28 + Math.random() * 60;
                 const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
                 t.size = 1.5 + Math.random() * 1.5;
                 t.color = greenColors[Math.floor(Math.random() * greenColors.length)];
                 fireTrails.push(t);
             }
             // Tiny green outer fling
-            for (let i = 0; i < 70; i++) {
+            for (let i = 0; i < 80; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = 55 + Math.random() * 80;
+                const dist = 60 + Math.random() * 88;
                 const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
                 t.size = 0.5 + Math.random() * 1;
                 t.color = greenColors[Math.floor(Math.random() * greenColors.length)];
