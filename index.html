@@ -343,15 +343,35 @@
                 haptic([30, 20, 30]);
             },
             'player-death': () => {
-                // Short impact thud — then SILENCE so death chimes can ring
-                synthNoise(0.15, 0.2, 3000);
-                synthTone(80, 0.12, 0.15, 'sine', 40);
-                haptic([50, 30, 70, 40, 100]);
-                // Quiet pad underneath — low enough that chimes cut through
+                // THE FINAL BRUSHSTROKE — from the working version (20cdded)
+                synthNoise(0.2, 0.2, 4000);
+                synthTone(80, 0.15, 0.15, 'sine', 40);
+                synthTone(160, 0.1, 0.1, 'sine', 80);
                 setTimeout(() => {
-                    synthTone(131, 3.0, 0.04, 'sine');    // C3 — barely there
-                    synthTone(262, 2.5, 0.05, 'sine');    // C4 — gentle bed
-                }, 500);
+                    synthTone(131, 3.0, 0.1, 'sine');
+                    synthTone(262, 2.8, 0.12, 'sine');
+                }, 250);
+                setTimeout(() => {
+                    synthTone(330, 2.5, 0.1, 'sine');
+                    synthTone(392, 2.3, 0.09, 'sine');
+                    synthTone(494, 2.0, 0.07, 'sine');
+                }, 400);
+                setTimeout(() => {
+                    synthTone(523, 1.8, 0.08, 'sine');
+                    synthTone(659, 1.6, 0.06, 'sine');
+                    synthTone(784, 1.4, 0.05, 'sine');
+                }, 600);
+                setTimeout(() => {
+                    synthTone(1047, 1.2, 0.04, 'sine');
+                    synthTone(1319, 1.0, 0.03, 'sine');
+                    synthTone(1568, 0.8, 0.025, 'sine');
+                    synthTone(1976, 0.6, 0.015, 'sine');
+                }, 800);
+                setTimeout(() => {
+                    synthTone(262, 3.5, 0.06, 'sine');
+                    synthTone(131, 4.0, 0.04, 'sine');
+                }, 1000);
+                haptic([50, 30, 70, 40, 100]);
             },
             'game-over': () => {
                 // The painting settles — gentle resolution
@@ -2370,18 +2390,11 @@
                             fireTrails.push(t);
                         }
                         if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
-                        // Death chime — resume audioCtx in case iOS suspended it
-                        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                        // Descending chime — exact working version from 20cdded
                         const deathNote = deathScale[idx % deathScale.length];
-                        const t = audioCtx.currentTime;
-                        const o = audioCtx.createOscillator();
-                        const g = audioCtx.createGain();
-                        o.type = 'sine';
-                        o.frequency.setValueAtTime(deathNote, t);
-                        g.gain.setValueAtTime(0.35, t);
-                        g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-                        o.connect(g); g.connect(audioCtx.destination);
-                        o.start(t); o.stop(t + 0.5);
+                        synthTone(deathNote, 0.2, 0.08, 'sine');
+                        synthTone(deathNote * 0.5, 0.15, 0.04, 'sine');
+                        synthNoise(0.05, 0.05, 1500);
                         haptic(12);
                         // Drift pixels — scaled by proximity
                         const driftCount = Math.floor(50 * scale);
