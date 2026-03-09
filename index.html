@@ -1893,14 +1893,13 @@
                 
                 ctx.save();
                 
-                // Pulsing effect
-                const pulse = Math.sin(this.bounce * 2) * 0.3 + 0.7;
-                ctx.globalAlpha = pulse;
-                
-                // Draw power-up icon — chromie is smaller since it's more common-looking
-                const iconSize = this.type === 'chromie' ? 36 : 48;
+                // Gentle float + size breathe (no fade)
+                ctx.globalAlpha = 1;
+                const baseSize = this.type === 'chromie' ? 36 : 96;
+                const sizeBreath = Math.sin(this.bounce * 1.5) * 6; // ±6px size pulse
+                const iconSize = baseSize + sizeBreath;
                 const halfIcon = iconSize / 2;
-                const bounceY = Math.sin(this.bounce) * 4;
+                const bounceY = Math.sin(this.bounce) * 6; // gentle float
                 
                 // Special handling for flame power-up - use animated walk cycle
                 if (this.type === 'flame' && sprites.flameWalk && sprites.flameWalk.length > 0) {
