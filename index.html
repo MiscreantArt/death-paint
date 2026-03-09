@@ -2403,7 +2403,8 @@
                 });
                 
                 // After all explosions + drift, transition to gameOver
-                const totalDeathTime = Math.max(3500, 80 + enemyCopy.length * 100 + 1500);
+                // Match death chime: 8 notes × 250ms + buffer = ~2.3s
+                const totalDeathTime = 2300;
                 setTimeout(() => {
                     if (gameState !== 'dying') return;
                     gameState = 'gameOver';
