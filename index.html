@@ -2142,8 +2142,8 @@
                             playSound('enemy-death');
                             playSound('kill-sound');
                             
-                            // Power-up drop: ~5% per kill (avg one every 15-20s)
-                            if (Math.random() < 0.05) {
+                            // Power-up drop: ~12% per kill
+                            if (Math.random() < 0.12) {
                                 const r = Math.random();
                                 const dropType = r < 0.33 ? 'duck' : r < 0.66 ? 'chromie' : 'skully';
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
