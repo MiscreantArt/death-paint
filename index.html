@@ -230,19 +230,6 @@
         // === Haptics ===
         function haptic(pattern) {
             if (navigator.vibrate) navigator.vibrate(pattern);
-            // iOS: sub-bass thump as physical feedback (felt through speakers/haptic engine)
-            if (audioCtx) {
-                const t = audioCtx.currentTime;
-                const dur = Array.isArray(pattern) ? 0.03 : Math.min(pattern / 1000, 0.05);
-                const o = audioCtx.createOscillator();
-                const g = audioCtx.createGain();
-                o.type = 'sine';
-                o.frequency.setValueAtTime(40, t); // deep sub-bass — felt not heard
-                g.gain.setValueAtTime(0.15, t);
-                g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-                o.connect(g); g.connect(audioCtx.destination);
-                o.start(t); o.stop(t + dur);
-            }
         }
 
         // === Synth helpers ===
