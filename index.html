@@ -389,6 +389,11 @@
                 setTimeout(() => synthTone(1047, 0.15, 0.12, 'sine'), 150);
                 haptic([15, 10, 15, 10, 20]);
             },
+            'chromie-shimmer': () => {
+                // Sparkly shimmer on each chrome shot
+                const freq = 1200 + Math.random() * 800;
+                synthTone(freq, 0.06, 0.08, 'sine', freq * 1.5);
+            },
             'chromie-shockwave': () => {
                 // Big swoosh with rising shimmer
                 synthNoise(0.4, 0.15, 4000);
@@ -1226,6 +1231,11 @@
                     projectiles.push(new LaserBeam(eyeX + perpX, eyeY + perpY, angle, 14, damage, '#ff2200', 0));
                     projectiles.push(new LaserBeam(eyeX - perpX, eyeY - perpY, angle, 14, damage, '#ff2200', 0));
                     playSound('laser-shoot');
+                    // Chrome weapon shimmer when rainbow active
+                    if (rainbowActive) {
+                        playSound('chromie-shimmer');
+                        haptic(8);
+                    }
                     screenShake = 1;
                 }
                 
@@ -1809,6 +1819,7 @@
                     case 'chromie':
                         // Rainbow trail + swap to chrome robot (#12)
                         playSound('chromie-shockwave');
+                        haptic([20, 10, 20, 10, 30]);
                         rainbowActive = true;
                         rainbowTimer = RAINBOW_DURATION;
                         rainbowHue = 0;
@@ -1828,11 +1839,13 @@
                     case 'duck':
                         // Duck mode — shoot duck projectiles, yellow trail, quack sounds
                         playSound('duck-quack');
+                        haptic([15, 10, 15]);
                         playerBuffs.duck = powerUp.duration;
                         break;
                     case 'skully':
                         // Next 4 kills explode all black + vignette
                         playSound('skully-activate');
+                        haptic([30, 15, 30]);
                         playerBuffs.skully = 4; // Kill count, not time
                         break;
                     case 'halo':
@@ -2533,14 +2546,14 @@
                 
                 // Aim indicator removed — lasers are the feedback
                 
-                // Skully vignette — dark edges when active
+                // Skully vignette — subtle dark edges when active
                 if (playerBuffs.skully > 0) {
                     const vGrad = ctx.createRadialGradient(
-                        canvas.width/2, canvas.height/2, canvas.width * 0.25,
-                        canvas.width/2, canvas.height/2, canvas.width * 0.7
+                        canvas.width/2, canvas.height/2, canvas.width * 0.35,
+                        canvas.width/2, canvas.height/2, canvas.width * 0.75
                     );
                     vGrad.addColorStop(0, 'rgba(0,0,0,0)');
-                    vGrad.addColorStop(1, 'rgba(0,0,0,0.6)');
+                    vGrad.addColorStop(1, 'rgba(0,0,0,0.25)');
                     ctx.fillStyle = vGrad;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
