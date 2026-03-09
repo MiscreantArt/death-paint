@@ -2315,12 +2315,7 @@
                     return Math.sqrt(dx*dx + dy*dy);
                 }), 1);
                 
-                // Pre-schedule ALL death chimes now via AudioContext (iOS-safe)
-                enemyCopy.forEach((enemy, idx) => {
-                    const deathNote = deathScale[idx % deathScale.length];
-                    const delay = 80 + idx * 100;
-                    synthToneAt(delay, deathNote, 0.5, 0.3, 'sine');
-                });
+
                 
                 enemyCopy.forEach((enemy, idx) => {
                     setTimeout(() => {
@@ -2375,7 +2370,18 @@
                             fireTrails.push(t);
                         }
                         if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
-                        // Chime is pre-scheduled via synthToneAt above
+                        // Death chime — resume audioCtx in case iOS suspended it
+                        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                        const deathNote = deathScale[idx % deathScale.length];
+                        const t = audioCtx.currentTime;
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.type = 'sine';
+                        o.frequency.setValueAtTime(deathNote, t);
+                        g.gain.setValueAtTime(0.35, t);
+                        g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+                        o.connect(g); g.connect(audioCtx.destination);
+                        o.start(t); o.stop(t + 0.5);
                         haptic(12);
                         // Drift pixels — scaled by proximity
                         const driftCount = Math.floor(50 * scale);
