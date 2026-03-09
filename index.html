@@ -1624,7 +1624,15 @@
                 this.life--;
                 this.age++;
                 
-                // No paint trail — color is earned through kills
+                // Duck projectiles leave a subtle yellow paint trail
+                if (this.isDuck && Math.random() < 0.35) {
+                    const t = new FireTrail(this.x, this.y);
+                    t.x = this.x + (Math.random() - 0.5) * 6;
+                    t.y = this.y + (Math.random() - 0.5) * 6;
+                    t.size = 1 + Math.random() * 1.2;
+                    t.color = Math.random() < 0.7 ? '#ffdd00' : '#ffee55';
+                    fireTrails.push(t);
+                }
                 
                 return this.life <= 0 || 
                        this.x < 0 || this.x > canvas.width ||
@@ -2030,15 +2038,7 @@
                 if (rainbowTimer <= 0) rainbowActive = false;
             }
             
-            // Duck trail — subtle yellow pixels behind player
-            if (playerBuffs.duck > 0 && Math.random() < 0.4) {
-                const t = new FireTrail(player.x, player.y);
-                t.x = player.x + (Math.random() - 0.5) * 12;
-                t.y = player.y + (Math.random() - 0.5) * 12;
-                t.size = 1 + Math.random() * 1.5;
-                t.color = Math.random() < 0.7 ? '#ffdd00' : '#ffee55';
-                fireTrails.push(t);
-            }
+            // No player trail during duck mode — trail comes from the projectiles instead
             
             // Chrome drop spawning — every ~15 seconds
             const now = Date.now();
