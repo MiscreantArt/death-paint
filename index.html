@@ -448,9 +448,12 @@
                 haptic(20);
             },
             'skully-activate': () => {
-                // Dark power-up — low ominous
-                synthTone(110, 0.3, 0.15, 'sawtooth', 55);
-                synthTone(165, 0.2, 0.1, 'square', 82);
+                // Creepy dissonant ping — minor second + descending undertone
+                synthTone(330, 0.4, 0.1, 'sine');           // eerie high ping
+                synthTone(311, 0.45, 0.08, 'sine');          // minor second — dissonance
+                synthTone(110, 0.5, 0.12, 'sawtooth', 55);  // slow descending growl
+                synthTone(165, 0.3, 0.06, 'square', 82);    // gritty undertone
+                synthNoise(0.15, 0.04, 800);                 // breath of static
                 haptic([30, 15, 30]);
             },
             'raincloud-activate': () => {
@@ -2603,11 +2606,11 @@
                 // Skully vignette — subtle dark edges when active
                 if (playerBuffs.skully > 0) {
                     const vGrad = ctx.createRadialGradient(
-                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.75,
-                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 1.0
+                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.45,
+                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.8
                     );
                     vGrad.addColorStop(0, 'rgba(0,0,0,0)');
-                    vGrad.addColorStop(1, 'rgba(0,0,0,0.3)');
+                    vGrad.addColorStop(1, 'rgba(0,0,0,0.45)');
                     ctx.fillStyle = vGrad;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
