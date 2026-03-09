@@ -2255,28 +2255,28 @@
                 if (paintRainTimer > 0) {
                     paintRainTimer--;
                     for (let i = 0; i < 6; i++) {
+                        // Each drop picks a random Y to stop at
+                        const stopY = TOOLBAR_H + 20 + Math.random() * (canvas.height - TOOLBAR_H - 40);
                         paintRainDrops.push({
                             x: Math.random() * canvas.width,
                             y: -10 - Math.random() * 50,
                             vy: 2 + Math.random() * 3,
                             vx: (Math.random() - 0.5) * 1,
                             size: 2 + Math.random() * 3,
-                            color: pixelColors[Math.floor(Math.random() * pixelColors.length)]
+                            color: pixelColors[Math.floor(Math.random() * pixelColors.length)],
+                            stopY: stopY
                         });
                     }
                 }
-                // Update drops — they fall and stick where they land
+                // Update drops — they fall and affix to background at their stop point
                 paintRainDrops = paintRainDrops.filter(d => {
                     d.x += d.vx;
                     d.y += d.vy;
-                    // Hit the bottom — stick to paint canvas
-                    if (d.y >= canvas.height - 2) {
+                    // Reached stop point — affix to paint canvas
+                    if (d.y >= d.stopY) {
                         if (paintCtx) {
                             paintCtx.fillStyle = d.color;
-                            const r = d.size * (0.6 + Math.random() * 0.4);
-                            paintCtx.beginPath();
-                            paintCtx.arc(d.x, canvas.height - 2, r, 0, Math.PI * 2);
-                            paintCtx.fill();
+                            paintCtx.fillRect(d.x - d.size, d.stopY - d.size, d.size * 2, d.size * 2);
                         }
                         return false;
                     }
