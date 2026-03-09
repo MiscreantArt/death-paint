@@ -2123,6 +2123,12 @@
                             playSound('kill-sound');
                             enemies.splice(eIndex, 1);
                         }
+                        // Shooting a non-grunt (hit or kill) resets paint rain streak
+                        if (enemy.tier !== 1) {
+                            streakCount = 0;
+                            streakPure = true;
+                            soundDefs._killNote = 0;
+                        }
                         projectiles.splice(pIndex, 1);
                     }
                 });
