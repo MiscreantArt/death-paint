@@ -1798,6 +1798,12 @@
                 // Lazy-load the power-up bird sprite sheet for hero swap
                 loadPowerUpBird(this.type);
                 
+                // Clear any active power-up before applying new one
+                playerBuffs.duck = 0;
+                playerBuffs.skully = 0;
+                rainbowActive = false;
+                rainbowTimer = 0;
+                
                 switch (this.type) {
                     case 'chromie':
                         // Rainbow trail + swap to chrome robot (#12)
@@ -1895,7 +1901,7 @@
                 
                 // Gentle float + size breathe (no fade)
                 ctx.globalAlpha = 1;
-                const baseSize = this.type === 'chromie' ? 36 : 96;
+                const baseSize = this.type === 'chromie' ? 36 : 110;
                 const sizeBreath = Math.sin(this.bounce * 1.5) * 6; // ±6px size pulse
                 const iconSize = baseSize + sizeBreath;
                 const halfIcon = iconSize / 2;
@@ -2133,7 +2139,9 @@
                             playSound('kill-sound');
                             
                             // Power-up drop: ~12% per kill, but not during intro and not before 10s
-                            if (introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.18) {
+                            // No drops while any power-up is active
+                            const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || rainbowActive;
+                            if (!anyBuffActive && introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.10) {
                                 const r = Math.random();
                                 const dropType = r < 0.40 ? 'duck' : r < 0.80 ? 'skully' : 'chromie'; // chromie rarest (20%)
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
