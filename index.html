@@ -2217,7 +2217,7 @@
 
             // Capture art when entering gameOver (after death sequence)
         function captureArt() {
-                const artScale = 2;
+                const artScale = 4;
                 const artCanvas = document.createElement('canvas');
                 artCanvas.width = canvas.width * artScale;
                 artCanvas.height = canvas.height * artScale;
@@ -2635,7 +2635,7 @@
             playSound('menu-tap');
             // Capture current canvas state
             if (!capturedArt || galleryReturnState === 'playing') {
-                const artScale = 2;
+                const artScale = 4;
                 const artCanvas = document.createElement('canvas');
                 artCanvas.width = canvas.width * artScale;
                 artCanvas.height = canvas.height * artScale;
@@ -2791,7 +2791,9 @@
                 ctx.fill();
                 ctx.font = 'bold 12px Arial';
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText('save to photos', cx, btnY + 22);
+                ctx.textBaseline = 'middle';
+                ctx.fillText('save to photos', cx, btnY + btnH / 2);
+                ctx.textBaseline = 'alphabetic';
             }
             
             // Tap to paint again
