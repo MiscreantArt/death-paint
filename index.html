@@ -230,6 +230,19 @@
         // === Haptics ===
         function haptic(pattern) {
             if (navigator.vibrate) navigator.vibrate(pattern);
+            // iOS: sub-bass thump as physical feedback (felt through speakers/haptic engine)
+            if (audioCtx) {
+                const t = audioCtx.currentTime;
+                const dur = Array.isArray(pattern) ? 0.03 : Math.min(pattern / 1000, 0.05);
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = 'sine';
+                o.frequency.setValueAtTime(40, t); // deep sub-bass — felt not heard
+                g.gain.setValueAtTime(0.15, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+                o.connect(g); g.connect(audioCtx.destination);
+                o.start(t); o.stop(t + dur);
+            }
         }
 
         // === Synth helpers ===
@@ -393,11 +406,14 @@
                 haptic([15, 10, 15, 10, 20]);
             },
             'chromie-shimmer': () => {
-                // Crystalline chime — two harmonics + soft octave bloom
-                const base = 800 + Math.random() * 600;
-                synthTone(base, 0.15, 0.05, 'sine');
-                synthTone(base * 1.5, 0.12, 0.03, 'sine'); // perfect fifth
-                synthTone(base * 2, 0.1, 0.02, 'sine');    // octave shimmer
+                // Glass bell — stacked major chord harmonics with gentle detune
+                const base = 900 + Math.random() * 400;
+                const detune = 1 + (Math.random() - 0.5) * 0.01; // subtle wobble
+                synthTone(base, 0.25, 0.035, 'sine');                    // root
+                synthTone(base * 1.25 * detune, 0.22, 0.025, 'sine');   // major third
+                synthTone(base * 1.5, 0.2, 0.02, 'sine');               // perfect fifth
+                synthTone(base * 2 * detune, 0.18, 0.015, 'sine');      // octave
+                synthTone(base * 3, 0.12, 0.008, 'sine');               // high overtone — sparkle
             },
             'chromie-shockwave': () => {
                 // Big swoosh with rising shimmer
