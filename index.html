@@ -572,6 +572,8 @@
         // Load power-up icons
         sprites.powerUps.duck = new Image();
         sprites.powerUps.duck.src = 'assets/powerup-duck.png';
+        sprites.powerUps.chromie = new Image();
+        sprites.powerUps.chromie.src = 'assets/powerup-chromie.png';
         
         // Directional duck projectile images
         const duckProjectileSprites = {
@@ -2040,18 +2042,7 @@
             
             // No player trail during duck mode — trail comes from the projectiles instead
             
-            // Chrome drop spawning — every ~15 seconds
             const now = Date.now();
-            if (now - lastChromeDrop > 45000 && !rainbowActive) {
-                lastChromeDrop = now;
-                chromeDrops.push({
-                    x: 50 + Math.random() * (canvas.width - 100),
-                    y: 50 + Math.random() * (canvas.height - 100),
-                    size: 18,
-                    hue: 0,
-                    born: now
-                });
-            }
             
             // Update chrome drops — check pickup + animate
             for (let i = chromeDrops.length - 1; i >= 0; i--) {
@@ -2124,10 +2115,10 @@
                             playSound('enemy-death');
                             playSound('kill-sound');
                             
-                            // Duck power-up drop: rare — 3% from grunts, 10% from greens/bosses
-                            const dropChance = (enemy.isGreen || enemy.isBoss) ? 0.10 : 0.03;
-                            if (Math.random() < dropChance) {
-                                powerUps.push(new PowerUp(enemy.x, enemy.y, 'duck'));
+                            // Power-up drop: ~5% per kill (avg one every 15-20s)
+                            if (Math.random() < 0.05) {
+                                const dropType = Math.random() < 0.5 ? 'duck' : 'chromie';
+                                powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
                             }
                             
@@ -2173,10 +2164,10 @@
                         playSound('enemy-death');
                         playSound('kill-sound');
                         
-                        // Duck power-up drop on skully kill
-                        const dropChance2 = (enemy.isGreen || enemy.isBoss) ? 0.10 : 0.03;
-                        if (Math.random() < dropChance2) {
-                            powerUps.push(new PowerUp(enemy.x, enemy.y, 'duck'));
+                        // Power-up drop on skully kill
+                        if (Math.random() < 0.05) {
+                            const dropType2 = Math.random() < 0.5 ? 'duck' : 'chromie';
+                            powerUps.push(new PowerUp(enemy.x, enemy.y, dropType2));
                             playSound('powerup-spawn');
                         }
                         
