@@ -390,9 +390,11 @@
                 haptic([15, 10, 15, 10, 20]);
             },
             'chromie-shimmer': () => {
-                // Sparkly shimmer on each chrome shot
-                const freq = 1200 + Math.random() * 800;
-                synthTone(freq, 0.06, 0.08, 'sine', freq * 1.5);
+                // Crystalline chime — two harmonics + soft octave bloom
+                const base = 800 + Math.random() * 600;
+                synthTone(base, 0.15, 0.05, 'sine');
+                synthTone(base * 1.5, 0.12, 0.03, 'sine'); // perfect fifth
+                synthTone(base * 2, 0.1, 0.02, 'sine');    // octave shimmer
             },
             'chromie-shockwave': () => {
                 // Big swoosh with rising shimmer
@@ -2640,9 +2642,77 @@
         const titleImg = new Image();
         titleImg.src = 'death-paint-title.png';
 
+        // Menu color explosion particles
+        let menuParticles = [];
+        let menuParticlesSpawned = false;
+        const menuColors = ['#ff2244', '#ff6600', '#ffcc00', '#22cc44', '#0088ff', '#8844ff', '#ff44aa', '#00ddcc', '#ff3366', '#44bbff', '#ffaa00', '#66ff66'];
+
+        function spawnMenuExplosion() {
+            menuParticles = [];
+            const cx = canvas.width / 2;
+            const cy = canvas.height * 0.42;
+            // Big radial burst — paint splats
+            for (let i = 0; i < 180; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.3 + Math.random() * 2.5;
+                const dist = 20 + Math.random() * 60;
+                menuParticles.push({
+                    x: cx + Math.cos(angle) * dist,
+                    y: cy + Math.sin(angle) * dist,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: 2 + Math.random() * 8,
+                    color: menuColors[Math.floor(Math.random() * menuColors.length)],
+                    alpha: 0.6 + Math.random() * 0.4,
+                    settled: false,
+                    settleTimer: 30 + Math.random() * 60
+                });
+            }
+            // Scattered confetti around edges
+            for (let i = 0; i < 80; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 100 + Math.random() * 200;
+                menuParticles.push({
+                    x: cx + Math.cos(angle) * dist,
+                    y: cy + Math.sin(angle) * dist,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    size: 1 + Math.random() * 4,
+                    color: menuColors[Math.floor(Math.random() * menuColors.length)],
+                    alpha: 0.3 + Math.random() * 0.5,
+                    settled: true,
+                    settleTimer: 0
+                });
+            }
+        }
+
         function drawMenu() {
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Spawn explosion once
+            if (!menuParticlesSpawned) {
+                spawnMenuExplosion();
+                menuParticlesSpawned = true;
+            }
+
+            // Draw & update menu particles (behind title)
+            menuParticles.forEach(p => {
+                if (!p.settled) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vx *= 0.97;
+                    p.vy *= 0.97;
+                    p.settleTimer--;
+                    if (p.settleTimer <= 0) p.settled = true;
+                }
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
 
             if (titleImg.complete && titleImg.naturalWidth) {
                 // Scale image to fit width, centered at top
