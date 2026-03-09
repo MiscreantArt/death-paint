@@ -2302,6 +2302,7 @@
                 
                 // Schedule all enemies to chain-explode — each plays descending note
                 const enemyCopy = [...enemies];
+                console.log('DEATH SEQUENCE: enemies to explode:', enemyCopy.length, 'audioCtx state:', audioCtx ? audioCtx.state : 'null');
                 const deathScale = [1047, 988, 880, 784, 659, 587, 523, 440, 392, 330, 262, 247, 220, 196, 175];
                 // Calculate max enemy distance for scaling
                 const maxDist = Math.max(...enemyCopy.map(e => {
@@ -2314,11 +2315,13 @@
                 enemyCopy.forEach((enemy, idx) => {
                     setTimeout(() => {
                         if (gameState !== 'dying') return;
-                        // CHIME FIRST — before heavy particle work blocks the thread
+                        // CHIME FIRST
+                        console.log('CHIME', idx, 'audioCtx:', audioCtx ? audioCtx.state : 'null');
+                        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
                         const deathNote = deathScale[idx % deathScale.length];
-                        synthTone(deathNote, 0.2, 0.08, 'sine');
-                        synthTone(deathNote * 0.5, 0.15, 0.04, 'sine');
-                        synthNoise(0.05, 0.05, 1500);
+                        synthTone(deathNote, 0.3, 0.15, 'sine');
+                        synthTone(deathNote * 0.5, 0.2, 0.08, 'sine');
+                        synthNoise(0.05, 0.08, 1500);
                         haptic(12);
                         // Distance from hero → closer = bigger explosion
                         const dx = enemy.x - player.x, dy = enemy.y - player.y;
