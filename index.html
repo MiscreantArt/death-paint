@@ -532,7 +532,7 @@
         let playerBuffs = {
             diamond: 0,  // Double points
             duck: 0,     // Cosmetic duck noises
-            skully: 0,   // Death touch
+            skully: 0,   // Next N kills explode black
             halo: 0,     // Immunity
             raincloud: 0, // Slow enemies
             flame: 0     // Damage boost
@@ -574,6 +574,8 @@
         sprites.powerUps.duck.src = 'assets/powerup-duck.png';
         sprites.powerUps.chromie = new Image();
         sprites.powerUps.chromie.src = 'assets/powerup-chromie.png';
+        sprites.powerUps.skully = new Image();
+        sprites.powerUps.skully.src = 'assets/powerup-skully.png';
         
         // Directional duck projectile images
         const duckProjectileSprites = {
@@ -769,6 +771,39 @@
 
         // Dark psychedelic splat — mostly black with neon accents
         const darkPsychColors = ['#111111', '#000000', '#1a001a', '#0a0a0a', '#220022', '#ff00ff', '#00ffff', '#ff0066', '#6600ff'];
+        // Skully kill — all black/dark explosion
+        const skullyColors = ['#000000', '#111111', '#1a1a1a', '#222222', '#0a0a0a', '#333333', '#050505'];
+        function spawnSkullySplat(x, y) {
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 4 + Math.random() * 12;
+                particles.push(new Particle(
+                    x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6,
+                    Math.cos(angle) * speed, Math.sin(angle) * speed,
+                    skullyColors[Math.floor(Math.random() * skullyColors.length)],
+                    15 + Math.floor(Math.random() * 15), 0.5 + Math.random() * 1
+                ));
+            }
+            // Black core
+            for (let i = 0; i < 120; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 50;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 3 + Math.random() * 4;
+                t.color = skullyColors[Math.floor(Math.random() * skullyColors.length)];
+                fireTrails.push(t);
+            }
+            // Outer spray
+            for (let i = 0; i < 80; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 40 + Math.random() * 100;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 1.5 + Math.random() * 2;
+                t.color = skullyColors[Math.floor(Math.random() * skullyColors.length)];
+                fireTrails.push(t);
+            }
+        }
+        
         function spawnDarkSplat(x, y) {
             // Burst particles
             for (let i = 0; i < 150; i++) {
@@ -1784,9 +1819,9 @@
                         playerBuffs.duck = powerUp.duration;
                         break;
                     case 'skully':
-                        // Death touch for 10s
+                        // Next 4 kills explode all black + vignette
                         playSound('skully-activate');
-                        playerBuffs.skully = powerUp.duration;
+                        playerBuffs.skully = 4; // Kill count, not time
                         break;
                     case 'halo':
                         // Immunity for 8s
@@ -2099,8 +2134,11 @@
                             killCount++;
                             onEnemyKill(enemy.tier);
                             
-                            // Death explosion — duck kills are yellow
-                            if (proj.isDuck) {
+                            // Death explosion — skully overrides all, then duck, then normal
+                            if (playerBuffs.skully > 0) {
+                                spawnSkullySplat(enemy.x, enemy.y);
+                                playerBuffs.skully--;
+                            } else if (proj.isDuck) {
                                 spawnDuckSplat(enemy.x, enemy.y);
                             } else if (enemy.isDarkBoss) {
                                 spawnDarkSplat(enemy.x, enemy.y);
@@ -2117,7 +2155,8 @@
                             
                             // Power-up drop: ~5% per kill (avg one every 15-20s)
                             if (Math.random() < 0.05) {
-                                const dropType = Math.random() < 0.5 ? 'duck' : 'chromie';
+                                const r = Math.random();
+                                const dropType = r < 0.33 ? 'duck' : r < 0.66 ? 'chromie' : 'skully';
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
                             }
@@ -2143,37 +2182,8 @@
                 const collisionDist = (enemy.size * 0.6 + player.size * 0.6) * (enemy.size * 0.6 + player.size * 0.6);
                 
                 if (distSq < collisionDist) {
-                    // Skully power-up: death touch - enemy dies instantly when touched
-                    if (playerBuffs.skully > 0) {
-                        // Tier-based scoring for skully kills
-                        let basePoints = 100; // Tier 1 default
-                        if (enemy.tier === 2) basePoints = 200;
-                        else if (enemy.tier === 3) basePoints = 300;
-                        else if (enemy.tier === 4) basePoints = 500;
-                        else if (enemy.tier === 5) basePoints = 1000;
-                        
-                        // Apply diamond doubling only
-                        const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
-                        score += points;
-                        killCount++;
-                        onEnemyKill(enemy.tier);
-                        
-                        // Colorful pixel death explosion
-                        if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else if (enemy.isGreen) spawnGreenSplat(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
-                        
-                        playSound('enemy-death');
-                        playSound('kill-sound');
-                        
-                        // Power-up drop on skully kill
-                        if (Math.random() < 0.05) {
-                            const dropType2 = Math.random() < 0.5 ? 'duck' : 'chromie';
-                            powerUps.push(new PowerUp(enemy.x, enemy.y, dropType2));
-                            playSound('powerup-spawn');
-                        }
-                        
-                        enemies.splice(index, 1);
-                    } else {
-                        // Normal collision - player takes damage
+                    {
+                        // Collision - player takes damage
                         playSound('player-hit');
                         player.takeDamage();
                         // Push enemy away
@@ -2534,6 +2544,18 @@
                 player.draw();
                 
                 // Aim indicator removed — lasers are the feedback
+                
+                // Skully vignette — dark edges when active
+                if (playerBuffs.skully > 0) {
+                    const vGrad = ctx.createRadialGradient(
+                        canvas.width/2, canvas.height/2, canvas.width * 0.25,
+                        canvas.width/2, canvas.height/2, canvas.width * 0.7
+                    );
+                    vGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                    vGrad.addColorStop(1, 'rgba(0,0,0,0.6)');
+                    ctx.fillStyle = vGrad;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
                 
                 // Draw UI
                 drawUI();
