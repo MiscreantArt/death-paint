@@ -403,9 +403,10 @@
                 haptic(25);
             },
             'duck-quack': () => {
-                // Cartoon quack
-                synthTone(300, 0.08, 0.15, 'square', 200);
-                setTimeout(() => synthTone(280, 0.1, 0.12, 'square', 180), 100);
+                // Real quack sound
+                const quack = new Audio('sounds/duck-quack.wav');
+                quack.volume = 0.5;
+                quack.play().catch(() => {});
                 haptic(15);
             },
             'flame-activate': () => {
@@ -571,7 +572,7 @@
         
         // Load power-up icons
         sprites.powerUps.duck = new Image();
-        sprites.powerUps.duck.src = 'assets/powerup-duck.png';
+        sprites.powerUps.duck.src = 'assets/duck-right.png';
         sprites.powerUps.chromie = new Image();
         sprites.powerUps.chromie.src = 'assets/powerup-chromie.png';
         sprites.powerUps.skully = new Image();
