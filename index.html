@@ -1362,15 +1362,18 @@
                 this.size = 36;
                 
                 // Time-based type phasing
-                let gruntChance = 0.84, greenChance = 0.09, whiteBossChance = 0.06;
+                let gruntChance = 0.68, greenChance = 0.15, whiteBossChance = 0.10;
+                // remainder (7%) = dark bosses
                 if (forceGrunt) {
                     gruntChance = 1.0; greenChance = 0; whiteBossChance = 0;
-                } else if (gameTime < 30) {
-                    gruntChance = 0.90; greenChance = 0.10; whiteBossChance = 0;
-                } else if (gameTime < 60) {
-                    gruntChance = 0.80; greenChance = 0.12; whiteBossChance = 0.08;
+                } else if (gameTime < 20) {
+                    // Intro: grunts + greens start showing early
+                    gruntChance = 0.85; greenChance = 0.15; whiteBossChance = 0;
+                } else if (gameTime < 40) {
+                    // White bosses join
+                    gruntChance = 0.70; greenChance = 0.18; whiteBossChance = 0.12;
                 }
-                // else: default (84/9/6 + dark bosses)
+                // else: full mix (68/15/10/7 dark)
                 
                 const roll = Math.random();
                 if (roll < gruntChance) {
