@@ -78,19 +78,27 @@
         let dyingDriftPixels = []; // pixels that drift outward after death
         let score = 0;
         let killCount = 0;
-        let streakCount = 0; // Kills without getting hit — resets on damage
+        let streakCount = 0; // Grunt kills in current streak
+        let streakPure = true; // True if only grunts killed (no other types hit first)
         let paintRainActive = false;
         let paintRainDrops = [];
         let paintRainTimer = 0;
         let gamePaused = false;
         
         // Kill streak → paint rain system
-        function onEnemyKill() {
-            streakCount++;
-            // At 10 streak, trigger paint rain
-            if (streakCount >= 10 && !paintRainActive) {
+        function onEnemyKill(tier) {
+            if (tier === 1) {
+                // Grunt kill — counts toward streak
+                streakCount++;
+            } else {
+                // Non-grunt killed — streak is no longer pure
+                streakPure = false;
+            }
+            // Paint rain: 10 grunts killed without killing any other type first
+            if (streakCount >= 10 && streakPure && !paintRainActive) {
                 triggerPaintRain();
                 streakCount = 0;
+                streakPure = true;
             }
         }
         
@@ -2007,7 +2015,7 @@
                             const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                             score += points;
                             killCount++;
-                            onEnemyKill();
+                            onEnemyKill(enemy.tier);
                             
                             // Colorful pixel death explosion
                             if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else if (enemy.isGreen) spawnGreenSplat(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -2044,7 +2052,7 @@
                         const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                         score += points;
                         killCount++;
-                        onEnemyKill();
+                        onEnemyKill(enemy.tier);
                         
                         // Colorful pixel death explosion
                         if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else if (enemy.isGreen) spawnGreenSplat(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
@@ -2057,6 +2065,7 @@
                         playSound('player-hit');
                         player.takeDamage();
                         streakCount = 0; // Reset kill streak on damage
+                        streakPure = true;
                         // Push enemy away
                         const length = Math.sqrt(distSq);
                         if (length > 0) {
@@ -2255,8 +2264,8 @@
                 if (paintRainTimer > 0) {
                     paintRainTimer--;
                     for (let i = 0; i < 6; i++) {
-                        // Each drop picks a random Y to stop at
-                        const stopY = TOOLBAR_H + 20 + Math.random() * (canvas.height - TOOLBAR_H - 40);
+                        // Each drop stops at a random Y — anywhere on the canvas
+                        const stopY = TOOLBAR_H + 5 + Math.random() * (canvas.height - TOOLBAR_H - 10);
                         paintRainDrops.push({
                             x: Math.random() * canvas.width,
                             y: -10 - Math.random() * 50,
@@ -2353,7 +2362,7 @@
                             const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
                             score += points;
                             killCount++;
-                            onEnemyKill();
+                            onEnemyKill(enemy.tier);
                             
                             if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else if (enemy.isGreen) spawnGreenSplat(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
                             
@@ -3166,6 +3175,7 @@
             hangMode = false;
             gamePaused = false;
             streakCount = 0;
+            streakPure = true;
             paintRainActive = false;
             paintRainDrops = [];
             paintRainTimer = 0;
