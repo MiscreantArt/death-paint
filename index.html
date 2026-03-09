@@ -663,6 +663,48 @@
 
         // Green splat — rare green birds explode in lush greens
         const greenColors = ['#22cc44', '#00ff55', '#33ee33', '#11aa33', '#44ff66', '#009922', '#66ff88', '#00dd44'];
+        // Duck splat — mostly yellow with some orange
+        const duckColors = ['#ffdd00', '#ffee00', '#ffcc00', '#ffaa00', '#fff200', '#ffe033', '#ffdd55', '#ffbb00'];
+        function spawnDuckSplat(x, y) {
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 3 + Math.random() * 10;
+                particles.push(new Particle(
+                    x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6,
+                    Math.cos(angle) * speed, Math.sin(angle) * speed,
+                    duckColors[Math.floor(Math.random() * duckColors.length)],
+                    15 + Math.floor(Math.random() * 20), 0.5 + Math.random() * 1.2
+                ));
+            }
+            // Dense yellow core
+            for (let i = 0; i < 120; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 25;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 2.5 + Math.random() * 2;
+                t.color = duckColors[Math.floor(Math.random() * duckColors.length)];
+                fireTrails.push(t);
+            }
+            // Medium mid
+            for (let i = 0; i < 80; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 20 + Math.random() * 45;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 1.5 + Math.random() * 1.5;
+                t.color = duckColors[Math.floor(Math.random() * duckColors.length)];
+                fireTrails.push(t);
+            }
+            // Tiny outer
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 50 + Math.random() * 70;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 0.5 + Math.random() * 1;
+                t.color = duckColors[Math.floor(Math.random() * duckColors.length)];
+                fireTrails.push(t);
+            }
+        }
+
         function spawnGreenSplat(x, y) {
             // Burst particles — all green tones
             for (let i = 0; i < 60; i++) {
@@ -1097,30 +1139,19 @@
                 const eyeX = this.x + eyeOffX;
                 const eyeY = this.y - this.size * 0.3;
                 
-                // Regular dual laser beams (offset 3-4px perpendicular to travel direction)
-                // Two beams, one per eye — offset perpendicular to aim
-                const perpX = -Math.sin(angle) * 5;
-                const perpY = Math.cos(angle) * 5;
-                projectiles.push(new LaserBeam(eyeX + perpX, eyeY + perpY, angle, 14, damage, '#ff2200', 0));
-                projectiles.push(new LaserBeam(eyeX - perpX, eyeY - perpY, angle, 14, damage, '#ff2200', 0));
-                playSound('laser-shoot');
-                
-                // Micro screen shake on shooting
-                screenShake = 1;
-                
-                // Duck power-up: Show "QUACK!" text particles instead of normal effects
                 if (playerBuffs.duck > 0) {
-                    // Create "QUACK!" text particle
-                    particles.push(new TextParticle(
-                        eyeX + Math.cos(angle) * 20,
-                        eyeY + Math.sin(angle) * 20,
-                        "QUACK!",
-                        '#ffdd00',
-                        30
-                    ));
+                    // DUCK MODE — shoot duck crops with quack
+                    // Pick duck emoji based on direction
+                    const duckEmojis = { east: '🦆', west: '🦆', north: '🦆', south: '🦆' };
+                    const duckProj = new LaserBeam(eyeX, eyeY, angle, 10, damage, '#ffdd00', 0);
+                    duckProj.isDuck = true;
+                    duckProj.duckDir = this.currentDirection;
+                    projectiles.push(duckProj);
+                    playSound('duck-quack');
+                    screenShake = 1;
                     
-                    // Yellow duck particles
-                    for (let i = 0; i < 5; i++) {
+                    // Yellow quack particles
+                    for (let i = 0; i < 4; i++) {
                         particles.push(new Particle(
                             eyeX + (Math.random() - 0.5) * 8,
                             eyeY + (Math.random() - 0.5) * 8,
@@ -1132,6 +1163,16 @@
                         ));
                     }
                 } else {
+                    // Regular dual laser beams
+                    const perpX = -Math.sin(angle) * 5;
+                    const perpY = Math.cos(angle) * 5;
+                    projectiles.push(new LaserBeam(eyeX + perpX, eyeY + perpY, angle, 14, damage, '#ff2200', 0));
+                    projectiles.push(new LaserBeam(eyeX - perpX, eyeY - perpY, angle, 14, damage, '#ff2200', 0));
+                    playSound('laser-shoot');
+                    screenShake = 1;
+                }
+                
+                if (playerBuffs.duck <= 0) {
                     // Visor glow particles (yellow)
                     for (let i = 0; i < 8; i++) {
                         particles.push(new Particle(
@@ -1577,6 +1618,30 @@
             draw() {
                 ctx.save();
                 
+                // Duck projectile — emoji duck
+                if (this.isDuck) {
+                    const duckSize = 18;
+                    // Flip duck emoji for west direction
+                    if (this.duckDir === 'west') {
+                        ctx.translate(this.x, this.y);
+                        ctx.scale(-1, 1);
+                        ctx.font = `${duckSize}px serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('🦆', 0, 0);
+                    } else {
+                        ctx.font = `${duckSize}px serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('🦆', this.x, this.y);
+                    }
+                    // Yellow glow
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = '#ffdd00';
+                    ctx.restore();
+                    return;
+                }
+                
                 // Cyclops-style red beam — big, bold, unmistakable
                 const growProgress = Math.min(1, this.age / 4);
                 const scale = 0.3 + growProgress * 0.7;
@@ -1687,7 +1752,7 @@
                         playerBuffs.diamond = powerUp.duration;
                         break;
                     case 'duck':
-                        // Cosmetic duck noises for 10s
+                        // Duck mode — shoot duck projectiles, yellow trail, quack sounds
                         playSound('duck-quack');
                         playerBuffs.duck = powerUp.duration;
                         break;
@@ -1955,6 +2020,16 @@
                 if (rainbowTimer <= 0) rainbowActive = false;
             }
             
+            // Duck trail — subtle yellow pixels behind player
+            if (playerBuffs.duck > 0 && Math.random() < 0.4) {
+                const t = new FireTrail(player.x, player.y);
+                t.x = player.x + (Math.random() - 0.5) * 12;
+                t.y = player.y + (Math.random() - 0.5) * 12;
+                t.size = 1 + Math.random() * 1.5;
+                t.color = Math.random() < 0.7 ? '#ffdd00' : '#ffee55';
+                fireTrails.push(t);
+            }
+            
             // Chrome drop spawning — every ~15 seconds
             const now = Date.now();
             if (now - lastChromeDrop > 15000 && !rainbowActive) {
@@ -2020,10 +2095,18 @@
                             killCount++;
                             onEnemyKill(enemy.tier);
                             
-                            // Colorful pixel death explosion
-                            if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else if (enemy.isGreen) spawnGreenSplat(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
-                            
-                            // Power-up drops disabled for now
+                            // Death explosion — duck kills are yellow
+                            if (proj.isDuck) {
+                                spawnDuckSplat(enemy.x, enemy.y);
+                            } else if (enemy.isDarkBoss) {
+                                spawnDarkSplat(enemy.x, enemy.y);
+                            } else if (enemy.isBoss) {
+                                spawnWhitePaintBomb(enemy.x, enemy.y);
+                            } else if (enemy.isGreen) {
+                                spawnGreenSplat(enemy.x, enemy.y);
+                            } else {
+                                spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                            }
                             
                             playSound('enemy-death');
                             playSound('kill-sound');
