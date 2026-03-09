@@ -1784,7 +1784,7 @@
                 // Check collision with player
                 const dx = this.x - player.x;
                 const dy = this.y - player.y;
-                if (dx * dx + dy * dy < 40 * 40) {
+                if (dx * dx + dy * dy < 50 * 50) {
                     this.collect();
                     return true;
                 }
@@ -1897,36 +1897,27 @@
                 const pulse = Math.sin(this.bounce * 2) * 0.3 + 0.7;
                 ctx.globalAlpha = pulse;
                 
+                // Draw power-up icon — same size as owl sprites
+                const iconSize = 72; // Big and visible (player is 38, enemies 36)
+                const halfIcon = iconSize / 2;
+                const bounceY = Math.sin(this.bounce) * 4;
+                
                 // Special handling for flame power-up - use animated walk cycle
                 if (this.type === 'flame' && sprites.flameWalk && sprites.flameWalk.length > 0) {
                     const frameIndex = Math.floor(this.bounce * 0.5) % sprites.flameWalk.length;
                     const frameSprite = sprites.flameWalk[frameIndex];
                     if (frameSprite) {
-                        ctx.drawImage(
-                            frameSprite,
-                            this.x - 20,
-                            this.y - 20 + Math.sin(this.bounce) * 3,
-                            40,
-                            40
-                        );
+                        ctx.drawImage(frameSprite, this.x - halfIcon, this.y - halfIcon + bounceY, iconSize, iconSize);
                     }
                 } else {
-                    // Draw cropped sprite icon if available
                     const spriteIcon = sprites.powerUps[this.type];
-                    if (spriteIcon) {
-                        // Draw the cropped sprite with bounce animation
-                        ctx.drawImage(
-                            spriteIcon,
-                            this.x - 20,
-                            this.y - 20 + Math.sin(this.bounce) * 3,
-                            40,
-                            40
-                        );
+                    if (spriteIcon && spriteIcon.complete) {
+                        ctx.drawImage(spriteIcon, this.x - halfIcon, this.y - halfIcon + bounceY, iconSize, iconSize);
                     } else {
-                        // Ultimate fallback - draw a colored circle
+                        // Fallback colored circle
                         ctx.fillStyle = powerUp.color;
                         ctx.beginPath();
-                        ctx.arc(this.x, this.y + Math.sin(this.bounce) * 3, 16, 0, Math.PI * 2);
+                        ctx.arc(this.x, this.y + bounceY, 20, 0, Math.PI * 2);
                         ctx.fill();
                     }
                 }
