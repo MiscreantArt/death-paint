@@ -177,7 +177,7 @@
         
         // Continuous enemy spawning system
         let lastEnemySpawnTime = 0;
-        let nextSpawnDelay = 2400; // Start slow — 3x normal, ramps down
+        let nextSpawnDelay = 1500;
         let maxEnemiesOnScreen = 12; // Starts chill, grows over time
         
         // Grunt trait definitions — each grunt has unique movement personality
@@ -1310,20 +1310,20 @@
                 this.y = y;
                 this.size = 36;
                 
-                // Phase-based spawning: grunts only early, then introduce others
-                // Phase 1 (0-20s): grunts only
-                // Phase 2 (20-45s): grunts + greens
-                // Phase 3 (45-75s): grunts + greens + white bosses
-                // Phase 4 (75s+): everything including dark bosses
-                let gruntChance = 0.84, greenChance = 0.09, whiteBossChance = 0.06;
-                if (forceGrunt || gameTime < 20) {
+                // Wave-based type selection
+                const waveDef = getWaveDef();
+                const waveType = forceGrunt ? 'gruntsOnly' : waveDef.types;
+                let gruntChance, greenChance, whiteBossChance;
+                if (waveType === 'gruntsOnly') {
                     gruntChance = 1.0; greenChance = 0; whiteBossChance = 0;
-                } else if (gameTime < 45) {
-                    gruntChance = 0.88; greenChance = 0.12; whiteBossChance = 0;
-                } else if (gameTime < 75) {
-                    gruntChance = 0.82; greenChance = 0.10; whiteBossChance = 0.08;
+                } else if (waveType === 'withGreens') {
+                    gruntChance = 0.85; greenChance = 0.15; whiteBossChance = 0;
+                } else if (waveType === 'withBosses') {
+                    gruntChance = 0.78; greenChance = 0.12; whiteBossChance = 0.10;
+                } else { // 'all'
+                    gruntChance = 0.72; greenChance = 0.12; whiteBossChance = 0.10;
+                    // remainder = dark bosses (6%)
                 }
-                // else: default chances (includes dark bosses in remainder)
                 
                 const roll = Math.random();
                 if (roll < gruntChance) {
@@ -1333,11 +1333,12 @@
                     this.favoriteColor = gruntFavoriteColor[this.spriteId] || null;
                     this.health = 2;
                     this.speed = 1.2 + Math.random() * 0.8;
+                    // Red-orange grunt is a bit quicker
+                    if (this.spriteId === 3047) this.speed += 0.4;
                     this.tier = 1;
                     this.isBoss = false;
                     this.isDarkBoss = false;
                     this.isGreen = false;
-                    this.trait = null;
                 } else if (roll < gruntChance + greenChance) {
                     // Green birds — wanderer movement pattern
                     const greens = [5715, 1320, 2642, 4089];
@@ -1926,10 +1927,42 @@
             return { x, y };
         }
         
-        // Intro phase: first 10 grunts come one at a time, nice and chill
-        let introGruntsSpawned = 0;
-        const INTRO_GRUNT_COUNT = 10;
-        const INTRO_SPAWN_INTERVAL = 1500; // ms between each intro grunt
+        // Wave system
+        let currentWave = 0;
+        let waveEnemiesSpawned = 0;
+        let waveEnemiesKilled = 0;
+        let waveActive = false;
+        let wavePauseUntil = 0; // timestamp when next wave starts
+        
+        const waves = [
+            // Wave 1: 10 grunts, slow spawn — learn controls, get first paint rain
+            { count: 10, spawnDelay: 1500, types: 'gruntsOnly', pause: 3000 },
+            // Wave 2: 10 more grunts, a bit faster
+            { count: 10, spawnDelay: 1200, types: 'gruntsOnly', pause: 3000 },
+            // Wave 3: 12 grunts + greens appear
+            { count: 12, spawnDelay: 1000, types: 'withGreens', pause: 3000 },
+            // Wave 4: 14 mixed, greens more common
+            { count: 14, spawnDelay: 900, types: 'withGreens', pause: 3000 },
+            // Wave 5: 14 + white bosses enter
+            { count: 14, spawnDelay: 900, types: 'withBosses', pause: 4000 },
+            // Wave 6+: escalating, everything
+            { count: 16, spawnDelay: 800, types: 'all', pause: 3000 },
+            { count: 18, spawnDelay: 700, types: 'all', pause: 3000 },
+            { count: 20, spawnDelay: 600, types: 'all', pause: 2500 },
+        ];
+        
+        function getWaveDef() {
+            if (currentWave < waves.length) return waves[currentWave];
+            // Beyond defined waves: keep escalating
+            const last = waves[waves.length - 1];
+            const extra = currentWave - waves.length + 1;
+            return {
+                count: Math.min(25, last.count + extra * 2),
+                spawnDelay: Math.max(500, last.spawnDelay - extra * 30),
+                types: 'all',
+                pause: 2500
+            };
+        }
         
         // Continuous enemy spawning
         function spawnSingleEnemy() {
@@ -1987,46 +2020,38 @@
             // Update game time and progressive difficulty
             gameTime = (Date.now() - gameStartTime) / 1000;
             
-            // === INTRO PHASE: one grunt at a time, chill ===
+            // === WAVE SYSTEM ===
             const currentTime = Date.now();
-            if (introGruntsSpawned < INTRO_GRUNT_COUNT) {
-                // Only spawn grunts, one by one, with generous spacing
-                if (currentTime - lastEnemySpawnTime >= INTRO_SPAWN_INTERVAL) {
+            const waveDef = getWaveDef();
+            
+            // Between waves — pause
+            if (!waveActive) {
+                if (currentTime >= wavePauseUntil) {
+                    waveActive = true;
+                    waveEnemiesSpawned = 0;
+                    waveEnemiesKilled = 0;
+                }
+            }
+            
+            // During wave — spawn enemies one by one
+            if (waveActive && waveEnemiesSpawned < waveDef.count) {
+                if (currentTime - lastEnemySpawnTime >= waveDef.spawnDelay && enemies.length < maxEnemiesOnScreen) {
                     const pos = getEdgeSpawnPos();
-                    enemies.push(new Enemy(pos.x, pos.y, true)); // forceGrunt
-                    introGruntsSpawned++;
+                    const forceGrunt = waveDef.types === 'gruntsOnly';
+                    enemies.push(new Enemy(pos.x, pos.y, forceGrunt));
+                    waveEnemiesSpawned++;
                     lastEnemySpawnTime = currentTime;
                 }
-                // No other spawning or difficulty changes during intro
-            } else {
-                // === MAIN PHASE: after intro grunts are out ===
-                
-                // Progressive difficulty (gentler ramp)
-                // Every 20 seconds: slightly faster enemies
-                if (Math.floor(gameTime / 20) > Math.floor((gameTime - 0.016) / 20)) {
-                    enemySpeedMultiplier += 0.06;
-                    playerSpeedBonus += 0.02;
-                }
-                
-                // Every 30 seconds: allow more enemies (cap at 25)
-                if (Math.floor(gameTime / 30) > Math.floor((gameTime - 0.016) / 30)) {
-                    maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
-                }
-                
-                // Spawn delay eases in: starts at 1800ms, slowly drops to 600ms
-                const timeSinceIntro = gameTime - (INTRO_GRUNT_COUNT * INTRO_SPAWN_INTERVAL / 1000);
-                const rampTime = Math.max(0, timeSinceIntro);
-                nextSpawnDelay = Math.max(600, 1800 - rampTime * 8); // ~2.5 min to reach fastest
-                
-                // Wave-based spawning with breathing room
-                const waveLength = 25; // seconds active
-                const pauseLength = Math.max(3, 5 - Math.floor(gameTime / 90)); // gentle pause shrink
-                const cycleTime = gameTime % (waveLength + pauseLength);
-                const inPause = cycleTime >= waveLength;
-                
-                if (!inPause && currentTime - lastEnemySpawnTime >= nextSpawnDelay) {
-                    spawnSingleEnemy();
-                }
+            }
+            
+            // Wave complete when all spawned AND all killed
+            if (waveActive && waveEnemiesSpawned >= waveDef.count && enemies.length === 0) {
+                waveActive = false;
+                currentWave++;
+                wavePauseUntil = currentTime + waveDef.pause;
+                // Gentle speed bump each wave
+                enemySpeedMultiplier += 0.04;
+                playerSpeedBonus += 0.015;
             }
             
             // Update player
@@ -3355,8 +3380,11 @@
             // Initialize stars and reset continuous spawning
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            nextSpawnDelay = INTRO_SPAWN_INTERVAL;
-            introGruntsSpawned = 0; // Reset intro phase
+            currentWave = 0;
+            waveEnemiesSpawned = 0;
+            waveEnemiesKilled = 0;
+            waveActive = true;
+            wavePauseUntil = 0;
         }
         
         function restartGame() {
