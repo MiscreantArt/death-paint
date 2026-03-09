@@ -654,34 +654,42 @@
         const greenColors = ['#22cc44', '#00ff55', '#33ee33', '#11aa33', '#44ff66', '#009922', '#66ff88', '#00dd44'];
         function spawnGreenSplat(x, y) {
             // Burst particles — all green tones
-            for (let i = 0; i < 40; i++) {
+            for (let i = 0; i < 60; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const speed = 4 + Math.random() * 10;
+                const speed = 4 + Math.random() * 12;
                 particles.push(new Particle(
                     x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6,
                     Math.cos(angle) * speed, Math.sin(angle) * speed,
                     greenColors[Math.floor(Math.random() * greenColors.length)],
-                    14 + Math.floor(Math.random() * 18), 0.5 + Math.random() * 1
+                    15 + Math.floor(Math.random() * 20), 0.5 + Math.random() * 1.2
                 ));
             }
-            // Green pixel spray — bigger than grunt, smaller than boss
-            for (let i = 0; i < 280; i++) {
+            // Green paint bomb — bigger than grunt, more green
+            // Dense green core
+            for (let i = 0; i < 160; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const radius = Math.abs((Math.random() + Math.random() + Math.random()) / 3) * 100;
-                const px = x + Math.cos(angle) * radius;
-                const py = y + Math.sin(angle) * radius * 0.85;
-                const color = greenColors[Math.floor(Math.random() * greenColors.length)];
-                const r = Math.random();
-                let size;
-                if (r < 0.55) size = 1;
-                else if (r < 0.80) size = 1.5;
-                else if (r < 0.93) size = 2.5;
-                else size = 4;
-                const t = new FireTrail(px, py);
-                t.size = size;
-                t.color = color;
-                t.x = px + (Math.random() - 0.5) * 4;
-                t.y = py + (Math.random() - 0.5) * 4;
+                const dist = Math.random() * 35;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 2.5 + Math.random() * 2.5;
+                t.color = greenColors[Math.floor(Math.random() * greenColors.length)];
+                fireTrails.push(t);
+            }
+            // Medium green mid
+            for (let i = 0; i < 100; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 25 + Math.random() * 55;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 1.5 + Math.random() * 1.5;
+                t.color = greenColors[Math.floor(Math.random() * greenColors.length)];
+                fireTrails.push(t);
+            }
+            // Tiny green outer fling
+            for (let i = 0; i < 70; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 55 + Math.random() * 80;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 0.5 + Math.random() * 1;
+                t.color = greenColors[Math.floor(Math.random() * greenColors.length)];
                 fireTrails.push(t);
             }
         }
@@ -700,13 +708,13 @@
                     c, 15 + Math.floor(Math.random() * 20), 0.5 + Math.random() * 1.2
                 ));
             }
-            // Massive dark core — 3x size
+            // Massive dark core — 3x size (reduced black %, smaller max squares)
             for (let i = 0; i < 400; i++) {
                 const angle = Math.random() * Math.PI * 2;
                 const dist = Math.random() * 120;
                 const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
-                t.size = 4 + Math.random() * 5;
-                t.color = Math.random() < 0.75 ? darkPsychColors[Math.floor(Math.random() * 4)] : darkPsychColors[4 + Math.floor(Math.random() * 5)];
+                t.size = 3.5 + Math.random() * 4; // was 4+5, now 3.5+4
+                t.color = Math.random() < 0.70 ? darkPsychColors[Math.floor(Math.random() * 4)] : darkPsychColors[4 + Math.floor(Math.random() * 5)]; // was 0.75, now 0.70
                 fireTrails.push(t);
             }
             // Medium ring
@@ -714,8 +722,8 @@
                 const angle = Math.random() * Math.PI * 2;
                 const dist = 90 + Math.random() * 180;
                 const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
-                t.size = 2.5 + Math.random() * 3;
-                t.color = Math.random() < 0.6 ? '#000000' : darkPsychColors[4 + Math.floor(Math.random() * 5)];
+                t.size = 2 + Math.random() * 2.5; // was 2.5+3, now 2+2.5
+                t.color = Math.random() < 0.55 ? '#000000' : darkPsychColors[4 + Math.floor(Math.random() * 5)]; // was 0.6, now 0.55
                 fireTrails.push(t);
             }
             // Outer fling
@@ -1266,7 +1274,7 @@
                     this.health = 4;
                     this.speed = 1.0 + Math.random() * 0.6;
                     this.tier = 2;
-                    this.size = 45;
+                    this.size = 40;
                     this.isBoss = false;
                     this.isDarkBoss = false;
                     this.isGreen = true;
