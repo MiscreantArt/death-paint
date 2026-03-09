@@ -177,8 +177,18 @@
         
         // Continuous enemy spawning system
         let lastEnemySpawnTime = 0;
-        let nextSpawnDelay = 800; // Start fast
-        let maxEnemiesOnScreen = 25;
+        let nextSpawnDelay = 2400; // Start slow — 3x normal, ramps down
+        let maxEnemiesOnScreen = 12; // Starts chill, grows over time
+        
+        // Grunt trait definitions — each grunt has unique movement personality
+        const gruntTraits = {
+            3372: 'zigzag',    // hot pink — weaves side to side
+            5463: 'stalker',   // cyan — creeps slow, bursts when close
+            7473: 'orbiter',   // lime — circles player, slowly closes in
+            9638: 'dasher',    // orange — pauses then dashes
+            668:  'shy',       // purple — slows when facing player, flanks
+            3047: 'berserker', // red-orange — faster as health drops
+        };
         
         // Game objects arrays
         let player;
@@ -1125,6 +1135,7 @@
             shoot(forceAngle = null) {
                 // Use forced angle (mobile auto-fire) or mouse position (desktop)
                 const angle = forceAngle !== null ? forceAngle : Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                this.lastAimAngle = angle; // Track for shy grunt trait
                 const damage = playerBuffs.flame > 0 ? 2 : 1;
                 
                 // Laser spawns from the bird's eyes — fixed position based on facing
@@ -1300,15 +1311,29 @@
         
         // Enemy class
         class Enemy {
-            constructor(x, y) {
+            constructor(x, y, forceGrunt = false) {
                 this.x = x;
                 this.y = y;
                 this.size = 36;
                 
-                // Grunts + rare types + bosses
+                // Phase-based spawning: grunts only early, then introduce others
+                // Phase 1 (0-20s): grunts only
+                // Phase 2 (20-45s): grunts + greens
+                // Phase 3 (45-75s): grunts + greens + white bosses
+                // Phase 4 (75s+): everything including dark bosses
+                let gruntChance = 0.84, greenChance = 0.09, whiteBossChance = 0.06;
+                if (forceGrunt || gameTime < 20) {
+                    gruntChance = 1.0; greenChance = 0; whiteBossChance = 0;
+                } else if (gameTime < 45) {
+                    gruntChance = 0.88; greenChance = 0.12; whiteBossChance = 0;
+                } else if (gameTime < 75) {
+                    gruntChance = 0.82; greenChance = 0.10; whiteBossChance = 0.08;
+                }
+                // else: default chances (includes dark bosses in remainder)
+                
                 const roll = Math.random();
-                if (roll < 0.84) {
-                    // Regular grunts — colorful splatter
+                if (roll < gruntChance) {
+                    // Regular grunts — colorful splatter, each with unique trait
                     const grunts = [3372, 5463, 7473, 9638, 668, 3047];
                     this.spriteId = grunts[Math.floor(Math.random() * grunts.length)];
                     this.favoriteColor = gruntFavoriteColor[this.spriteId] || null;
@@ -1318,8 +1343,18 @@
                     this.isBoss = false;
                     this.isDarkBoss = false;
                     this.isGreen = false;
-                } else if (roll < 0.90) {
-                    // Green birds — rare, slightly bigger, green explosion
+                    this.trait = gruntTraits[this.spriteId] || null;
+                    // Trait-specific init
+                    this.traitTimer = 0;
+                    this.zigzagPhase = Math.random() * Math.PI * 2;
+                    this.orbitAngle = Math.atan2(y - canvas.height/2, x - canvas.width/2);
+                    this.orbitRadius = 0; // computed in update
+                    this.dashCooldown = 60 + Math.floor(Math.random() * 40); // frames until first dash
+                    this.isDashing = false;
+                    this.dashTimer = 0;
+                    this.baseSpeed = this.speed;
+                } else if (roll < gruntChance + greenChance) {
+                    // Green birds — wanderer movement pattern
                     const greens = [5715, 1320, 2642, 4089];
                     this.spriteId = greens[Math.floor(Math.random() * greens.length)];
                     this.favoriteColor = '#22cc44';
@@ -1330,7 +1365,11 @@
                     this.isBoss = false;
                     this.isDarkBoss = false;
                     this.isGreen = true;
-                } else if (roll < 0.96) {
+                    // Wanderer movement — zigzag unpredictably
+                    this.wanderAngle = Math.random() * Math.PI * 2;
+                    this.wanderTimer = 0;
+                    this.wanderChangeInterval = 40 + Math.floor(Math.random() * 60);
+                } else if (roll < gruntChance + greenChance + whiteBossChance) {
                     // White bosses — erase color on death
                     const whiteBosses = [2941, 8959, 2080, 3904, 8398, 5249];
                     this.spriteId = whiteBosses[Math.floor(Math.random() * whiteBosses.length)];
@@ -1384,21 +1423,108 @@
                     this.hitFlash--;
                 }
                 
-                // Move toward player
+                // Move toward player — with trait-based personality
                 const dx = player.x - this.x;
                 const dy = player.y - this.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
+                this.traitTimer = (this.traitTimer || 0) + 1;
                 
                 if (dist > 0) {
                     // Apply raincloud slowing effect and progressive difficulty
                     const raincloudslow = playerBuffs.raincloud > 0 ? 0.4 : 1;
-                    const finalSpeed = this.speed * enemySpeedMultiplier * raincloudslow;
-                    this.x += (dx / dist) * finalSpeed;
-                    this.y += (dy / dist) * finalSpeed;
+                    let finalSpeed = this.speed * enemySpeedMultiplier * raincloudslow;
+                    let moveX = (dx / dist);
+                    let moveY = (dy / dist);
+                    
+                    // === GRUNT TRAITS ===
+                    if (this.trait === 'zigzag') {
+                        // Weave side to side while approaching
+                        this.zigzagPhase += 0.08;
+                        const perpX = -dy / dist;
+                        const perpY = dx / dist;
+                        const wave = Math.sin(this.zigzagPhase) * 0.7;
+                        moveX += perpX * wave;
+                        moveY += perpY * wave;
+                    } else if (this.trait === 'stalker') {
+                        // Creep slow when far, burst when close
+                        if (dist > 150) {
+                            finalSpeed *= 0.5; // Slow creep
+                        } else {
+                            finalSpeed *= 1.8; // Burst!
+                        }
+                    } else if (this.trait === 'orbiter') {
+                        // Circle the player, slowly spiraling in
+                        this.orbitAngle += 0.03;
+                        this.orbitRadius = dist; // track current distance
+                        const orbitPull = 0.15; // how much it spirals inward vs orbiting
+                        moveX = Math.cos(this.orbitAngle) * (1 - orbitPull) + (dx / dist) * orbitPull;
+                        moveY = Math.sin(this.orbitAngle) * (1 - orbitPull) + (dy / dist) * orbitPull;
+                    } else if (this.trait === 'dasher') {
+                        // Pause, then dash in short bursts
+                        if (this.isDashing) {
+                            finalSpeed *= 2.5;
+                            this.dashTimer--;
+                            if (this.dashTimer <= 0) {
+                                this.isDashing = false;
+                                this.dashCooldown = 50 + Math.floor(Math.random() * 40);
+                            }
+                        } else {
+                            finalSpeed *= 0.15; // Nearly still while waiting
+                            this.dashCooldown--;
+                            if (this.dashCooldown <= 0) {
+                                this.isDashing = true;
+                                this.dashTimer = 15 + Math.floor(Math.random() * 10);
+                            }
+                        }
+                    } else if (this.trait === 'shy') {
+                        // Slow when facing player, approach from angles
+                        const playerFacing = Math.atan2(
+                            this.y - player.y,
+                            this.x - player.x
+                        );
+                        const playerAim = player.lastAimAngle || 0;
+                        const angleDiff = Math.abs(playerFacing - playerAim);
+                        const normalizedDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
+                        if (normalizedDiff < 0.8) {
+                            // Player is looking at me — slow down and flank
+                            finalSpeed *= 0.3;
+                            const perpX = -dy / dist;
+                            const perpY = dx / dist;
+                            moveX = perpX * 0.8 + moveX * 0.2;
+                            moveY = perpY * 0.8 + moveY * 0.2;
+                        }
+                    } else if (this.trait === 'berserker') {
+                        // Gets faster as health drops
+                        const healthRatio = this.health / 2; // 2 is max grunt HP
+                        finalSpeed *= (1 + (1 - healthRatio) * 1.5); // Up to 2.5x at low HP
+                    }
+                    
+                    // === GREEN BIRD WANDERER ===
+                    if (this.isGreen) {
+                        this.wanderTimer++;
+                        if (this.wanderTimer >= this.wanderChangeInterval) {
+                            this.wanderTimer = 0;
+                            this.wanderChangeInterval = 40 + Math.floor(Math.random() * 60);
+                            // Pick new random wander offset
+                            this.wanderAngle = Math.random() * Math.PI * 2;
+                        }
+                        // Blend: 50% toward player, 50% wander direction
+                        const wx = Math.cos(this.wanderAngle);
+                        const wy = Math.sin(this.wanderAngle);
+                        moveX = moveX * 0.5 + wx * 0.5;
+                        moveY = moveY * 0.5 + wy * 0.5;
+                    }
+                    
+                    // Normalize and apply
+                    const moveMag = Math.sqrt(moveX * moveX + moveY * moveY);
+                    if (moveMag > 0) {
+                        this.x += (moveX / moveMag) * finalSpeed;
+                        this.y += (moveY / moveMag) * finalSpeed;
+                    }
                     this.angle = Math.atan2(dy, dx);
                     
                     // Update facing direction toward player
-                    this.currentDirection = this.getCardinalDirection(dx, dy);
+                    this.currentDirection = this.getCardinalDirection(moveX, moveY);
                     
                     // Drop permanent color pixels — builds up like Jackson Pollock (not for bosses)
                     // Reduced: 1 pixel every 4 frames to prevent canvas saturation
@@ -1892,6 +2018,24 @@
             }
         }
         
+        // Get a random edge spawn position
+        function getEdgeSpawnPos() {
+            let x, y;
+            const side = Math.floor(Math.random() * 4);
+            switch (side) {
+                case 0: x = Math.random() * canvas.width; y = -50; break;
+                case 1: x = canvas.width + 50; y = Math.random() * canvas.height; break;
+                case 2: x = Math.random() * canvas.width; y = canvas.height + 50; break;
+                case 3: x = -50; y = Math.random() * canvas.height; break;
+            }
+            return { x, y };
+        }
+        
+        // Intro phase: first 10 grunts come one at a time, nice and chill
+        let introGruntsSpawned = 0;
+        const INTRO_GRUNT_COUNT = 10;
+        const INTRO_SPAWN_INTERVAL = 2500; // ms between each intro grunt
+        
         // Continuous enemy spawning
         function spawnSingleEnemy() {
             // Don't spawn if we're at max capacity
@@ -1899,32 +2043,8 @@
                 return;
             }
             
-            let x, y;
-            const side = Math.floor(Math.random() * 4);
-            
-            switch (side) {
-                case 0: // Top
-                    x = Math.random() * canvas.width;
-                    y = -50;
-                    break;
-                case 1: // Right
-                    x = canvas.width + 50;
-                    y = Math.random() * canvas.height;
-                    break;
-                case 2: // Bottom
-                    x = Math.random() * canvas.width;
-                    y = canvas.height + 50;
-                    break;
-                case 3: // Left
-                    x = -50;
-                    y = Math.random() * canvas.height;
-                    break;
-            }
-            
-            enemies.push(new Enemy(x, y));
-            
-            // Spawn delay: 1-2 seconds
-            nextSpawnDelay = 500 + Math.random() * 600;
+            const pos = getEdgeSpawnPos();
+            enemies.push(new Enemy(pos.x, pos.y));
             lastEnemySpawnTime = Date.now();
         }
         
@@ -1972,33 +2092,46 @@
             // Update game time and progressive difficulty
             gameTime = (Date.now() - gameStartTime) / 1000;
             
-            // Every 15 seconds: decrease spawn delay (min 400ms)
-            if (Math.floor(gameTime / 15) > Math.floor((gameTime - 0.016) / 15)) {
-                nextSpawnDelay = Math.max(400, nextSpawnDelay - 150);
-            }
-            
-            // Every 20 seconds: increase enemy speed
-            if (Math.floor(gameTime / 20) > Math.floor((gameTime - 0.016) / 20)) {
-                enemySpeedMultiplier += 0.08;
-                playerSpeedBonus += 0.03;
-            }
-            
-            // Every 30 seconds: increase max enemies (cap at 30)
-            if (Math.floor(gameTime / 30) > Math.floor((gameTime - 0.016) / 30)) {
-                maxEnemiesOnScreen = Math.min(30, maxEnemiesOnScreen + 2);
-            }
-            
-
-            
-            // Wave-based spawning with breathing room
+            // === INTRO PHASE: one grunt at a time, chill ===
             const currentTime = Date.now();
-            const waveLength = 30; // seconds per wave
-            const pauseLength = 4; // seconds pause between waves
-            const cycleTime = gameTime % (waveLength + pauseLength);
-            const inPause = cycleTime >= waveLength;
-            
-            if (!inPause && currentTime - lastEnemySpawnTime >= nextSpawnDelay) {
-                spawnSingleEnemy();
+            if (introGruntsSpawned < INTRO_GRUNT_COUNT) {
+                // Only spawn grunts, one by one, with generous spacing
+                if (currentTime - lastEnemySpawnTime >= INTRO_SPAWN_INTERVAL) {
+                    const pos = getEdgeSpawnPos();
+                    enemies.push(new Enemy(pos.x, pos.y, true)); // forceGrunt
+                    introGruntsSpawned++;
+                    lastEnemySpawnTime = currentTime;
+                }
+                // No other spawning or difficulty changes during intro
+            } else {
+                // === MAIN PHASE: after intro grunts are out ===
+                
+                // Progressive difficulty (gentler ramp)
+                // Every 20 seconds: slightly faster enemies
+                if (Math.floor(gameTime / 20) > Math.floor((gameTime - 0.016) / 20)) {
+                    enemySpeedMultiplier += 0.06;
+                    playerSpeedBonus += 0.02;
+                }
+                
+                // Every 30 seconds: allow more enemies (cap at 25)
+                if (Math.floor(gameTime / 30) > Math.floor((gameTime - 0.016) / 30)) {
+                    maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
+                }
+                
+                // Spawn delay eases in: starts at 1800ms, slowly drops to 600ms
+                const timeSinceIntro = gameTime - (INTRO_GRUNT_COUNT * INTRO_SPAWN_INTERVAL / 1000);
+                const rampTime = Math.max(0, timeSinceIntro);
+                nextSpawnDelay = Math.max(600, 1800 - rampTime * 8); // ~2.5 min to reach fastest
+                
+                // Wave-based spawning with breathing room
+                const waveLength = 25; // seconds active
+                const pauseLength = Math.max(3, 5 - Math.floor(gameTime / 90)); // gentle pause shrink
+                const cycleTime = gameTime % (waveLength + pauseLength);
+                const inPause = cycleTime >= waveLength;
+                
+                if (!inPause && currentTime - lastEnemySpawnTime >= nextSpawnDelay) {
+                    spawnSingleEnemy();
+                }
             }
             
             // Update player
@@ -3327,7 +3460,8 @@
             // Initialize stars and reset continuous spawning
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            nextSpawnDelay = 1000; // Start spawning after 1 second
+            nextSpawnDelay = INTRO_SPAWN_INTERVAL;
+            introGruntsSpawned = 0; // Reset intro phase
         }
         
         function restartGame() {
