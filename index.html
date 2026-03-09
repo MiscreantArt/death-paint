@@ -213,6 +213,11 @@
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
+            // Preload death chime so it plays instantly
+            if (!soundDefs._deathChime) {
+                soundDefs._deathChime = new Audio('sounds/death-chime.wav');
+                soundDefs._deathChime.load();
+            }
         }
 
         function startMusic() {
@@ -343,9 +348,13 @@
                 haptic([30, 20, 30]);
             },
             'player-death': () => {
-                // Death jingle — WAV file, simple and reliable
-                const chime = new Audio('sounds/death-chime.wav');
-                chime.volume = 0.8;
+                // Death jingle — preloaded WAV, plays immediately
+                if (!soundDefs._deathChime) {
+                    soundDefs._deathChime = new Audio('sounds/death-chime.wav');
+                }
+                const chime = soundDefs._deathChime;
+                chime.currentTime = 0;
+                chime.volume = 0.85;
                 chime.play().catch(() => {});
                 haptic([50, 30, 70, 40, 100]);
             },
