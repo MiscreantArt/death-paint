@@ -1682,9 +1682,9 @@
             draw() {
                 ctx.save();
                 
-                // Duck projectile — directional duck image (same size as bird sprites)
+                // Duck projectile — big chunky duck (2.5x bird size)
                 if (this.isDuck) {
-                    const duckSize = 36;
+                    const duckSize = 90;
                     // Pick sprite based on shoot direction
                     let duckDir = 'right'; // default
                     if (this.duckDir === 'west') duckDir = 'left';
@@ -2133,8 +2133,8 @@
                             playSound('enemy-death');
                             playSound('kill-sound');
                             
-                            // Power-up drop: ~12% per kill
-                            if (Math.random() < 0.12) {
+                            // Power-up drop: ~12% per kill, but not during intro and not before 10s
+                            if (introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.12) {
                                 const r = Math.random();
                                 const dropType = r < 0.40 ? 'duck' : r < 0.80 ? 'skully' : 'chromie'; // chromie rarest (20%)
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
