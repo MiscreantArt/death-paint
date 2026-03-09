@@ -3259,11 +3259,11 @@
             if (zoneLabelsVisible === 0) {
                 zoneLabelsVisible = 180; // 3 seconds at 60fps
             }
-            // Dismiss tutorial overlay on first touch
-            if (!tutorialDismissed && tutorialOverlay > 40) {
-                tutorialOverlay = 40; // start fade-out
+            // Dismiss tutorial overlay on first touch (but not in first 500ms — ignore the menu tap bleeding through)
+            if (!tutorialDismissed && tutorialOverlay > 0 && (Date.now() - gameStartTime) > 500) {
+                if (tutorialOverlay > 40) tutorialOverlay = 40; // start fade-out
+                tutorialDismissed = true;
             }
-            tutorialDismissed = true;
             
             const rect = canvas.getBoundingClientRect();
             const centerX = canvas.width / 2;
