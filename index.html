@@ -181,12 +181,13 @@
         let maxEnemiesOnScreen = 12; // Starts chill, grows over time
         
         // Grunt trait definitions — each grunt has unique movement personality
+        // Grunt traits — all walk TOWARD you, just with personality
         const gruntTraits = {
-            3372: 'zigzag',    // hot pink — weaves side to side
+            3372: 'zigzag',    // hot pink — weaves side to side while approaching
             5463: 'stalker',   // cyan — creeps slow, bursts when close
-            7473: 'orbiter',   // lime — circles player, slowly closes in
-            9638: 'dasher',    // orange — pauses then dashes
-            668:  'shy',       // purple — slows when facing player, flanks
+            7473: 'drifter',   // lime — wobbles laterally, lazy approach
+            9638: 'dasher',    // orange — stop-go rhythm
+            668:  'cautious',  // purple — slows down near player
             3047: 'berserker', // red-orange — faster as health drops
         };
         
@@ -1347,8 +1348,6 @@
                     // Trait-specific init
                     this.traitTimer = 0;
                     this.zigzagPhase = Math.random() * Math.PI * 2;
-                    this.orbitAngle = Math.atan2(y - canvas.height/2, x - canvas.width/2);
-                    this.orbitRadius = 0; // computed in update
                     this.dashCooldown = 60 + Math.floor(Math.random() * 40); // frames until first dash
                     this.isDashing = false;
                     this.dashTimer = 0;
@@ -1436,67 +1435,56 @@
                     let moveX = (dx / dist);
                     let moveY = (dy / dist);
                     
-                    // === GRUNT TRAITS ===
+                    // === GRUNT TRAITS — all approach, just with personality ===
                     if (this.trait === 'zigzag') {
-                        // Weave side to side while approaching
-                        this.zigzagPhase += 0.08;
+                        // Weave side to side while walking toward you
+                        this.zigzagPhase += 0.07;
                         const perpX = -dy / dist;
                         const perpY = dx / dist;
-                        const wave = Math.sin(this.zigzagPhase) * 0.7;
+                        const wave = Math.sin(this.zigzagPhase) * 0.45;
                         moveX += perpX * wave;
                         moveY += perpY * wave;
                     } else if (this.trait === 'stalker') {
-                        // Creep slow when far, burst when close
-                        if (dist > 150) {
-                            finalSpeed *= 0.5; // Slow creep
+                        // Slow approach, speeds up when close
+                        if (dist > 140) {
+                            finalSpeed *= 0.6;
                         } else {
-                            finalSpeed *= 1.8; // Burst!
+                            finalSpeed *= 1.5;
                         }
-                    } else if (this.trait === 'orbiter') {
-                        // Circle the player, slowly spiraling in
-                        this.orbitAngle += 0.03;
-                        this.orbitRadius = dist; // track current distance
-                        const orbitPull = 0.15; // how much it spirals inward vs orbiting
-                        moveX = Math.cos(this.orbitAngle) * (1 - orbitPull) + (dx / dist) * orbitPull;
-                        moveY = Math.sin(this.orbitAngle) * (1 - orbitPull) + (dy / dist) * orbitPull;
+                    } else if (this.trait === 'drifter') {
+                        // Lazy wobble — slight lateral drift while approaching
+                        this.zigzagPhase += 0.03;
+                        const perpX = -dy / dist;
+                        const perpY = dx / dist;
+                        const drift = Math.sin(this.zigzagPhase) * 0.3;
+                        moveX += perpX * drift;
+                        moveY += perpY * drift;
+                        finalSpeed *= 0.85; // A bit slower, lazy
                     } else if (this.trait === 'dasher') {
-                        // Pause, then dash in short bursts
+                        // Stop-go: walks, pauses, walks
                         if (this.isDashing) {
-                            finalSpeed *= 2.5;
+                            finalSpeed *= 1.8;
                             this.dashTimer--;
                             if (this.dashTimer <= 0) {
                                 this.isDashing = false;
-                                this.dashCooldown = 50 + Math.floor(Math.random() * 40);
+                                this.dashCooldown = 40 + Math.floor(Math.random() * 30);
                             }
                         } else {
-                            finalSpeed *= 0.15; // Nearly still while waiting
+                            finalSpeed *= 0.25; // Slow crawl between dashes
                             this.dashCooldown--;
                             if (this.dashCooldown <= 0) {
                                 this.isDashing = true;
-                                this.dashTimer = 15 + Math.floor(Math.random() * 10);
+                                this.dashTimer = 20 + Math.floor(Math.random() * 10);
                             }
                         }
-                    } else if (this.trait === 'shy') {
-                        // Slow when facing player, approach from angles
-                        const playerFacing = Math.atan2(
-                            this.y - player.y,
-                            this.x - player.x
-                        );
-                        const playerAim = player.lastAimAngle || 0;
-                        const angleDiff = Math.abs(playerFacing - playerAim);
-                        const normalizedDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
-                        if (normalizedDiff < 0.8) {
-                            // Player is looking at me — slow down and flank
-                            finalSpeed *= 0.3;
-                            const perpX = -dy / dist;
-                            const perpY = dx / dist;
-                            moveX = perpX * 0.8 + moveX * 0.2;
-                            moveY = perpY * 0.8 + moveY * 0.2;
-                        }
+                    } else if (this.trait === 'cautious') {
+                        // Slows down as it gets closer — hesitant
+                        const closeness = Math.max(0, 1 - dist / 300);
+                        finalSpeed *= (1 - closeness * 0.5); // Up to 50% slower near player
                     } else if (this.trait === 'berserker') {
                         // Gets faster as health drops
-                        const healthRatio = this.health / 2; // 2 is max grunt HP
-                        finalSpeed *= (1 + (1 - healthRatio) * 1.5); // Up to 2.5x at low HP
+                        const healthRatio = this.health / 2;
+                        finalSpeed *= (1 + (1 - healthRatio) * 1.2);
                     }
                     
                     // === GREEN BIRD WANDERER ===
@@ -2034,7 +2022,7 @@
         // Intro phase: first 10 grunts come one at a time, nice and chill
         let introGruntsSpawned = 0;
         const INTRO_GRUNT_COUNT = 10;
-        const INTRO_SPAWN_INTERVAL = 2500; // ms between each intro grunt
+        const INTRO_SPAWN_INTERVAL = 1500; // ms between each intro grunt
         
         // Continuous enemy spawning
         function spawnSingleEnemy() {
