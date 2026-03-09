@@ -1898,7 +1898,7 @@
                 ctx.globalAlpha = pulse;
                 
                 // Draw power-up icon — chromie is smaller since it's more common-looking
-                const iconSize = this.type === 'chromie' ? 24 : 72;
+                const iconSize = this.type === 'chromie' ? 36 : 48;
                 const halfIcon = iconSize / 2;
                 const bounceY = Math.sin(this.bounce) * 4;
                 
@@ -2134,7 +2134,7 @@
                             playSound('kill-sound');
                             
                             // Power-up drop: ~12% per kill, but not during intro and not before 10s
-                            if (introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.12) {
+                            if (introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.18) {
                                 const r = Math.random();
                                 const dropType = r < 0.40 ? 'duck' : r < 0.80 ? 'skully' : 'chromie'; // chromie rarest (20%)
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
