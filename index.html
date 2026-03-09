@@ -2340,6 +2340,12 @@
                 enemyCopy.forEach((enemy, idx) => {
                     setTimeout(() => {
                         if (gameState !== 'dying') return;
+                        // CHIME FIRST — before heavy particle work blocks the thread
+                        const deathNote = deathScale[idx % deathScale.length];
+                        synthTone(deathNote, 0.2, 0.08, 'sine');
+                        synthTone(deathNote * 0.5, 0.15, 0.04, 'sine');
+                        synthNoise(0.05, 0.05, 1500);
+                        haptic(12);
                         // Distance from hero → closer = bigger explosion
                         const dx = enemy.x - player.x, dy = enemy.y - player.y;
                         const enemyDist = Math.sqrt(dx*dx + dy*dy);
@@ -2390,12 +2396,7 @@
                             fireTrails.push(t);
                         }
                         if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
-                        // Descending chime — exact working version from 20cdded
-                        const deathNote = deathScale[idx % deathScale.length];
-                        synthTone(deathNote, 0.2, 0.08, 'sine');
-                        synthTone(deathNote * 0.5, 0.15, 0.04, 'sine');
-                        synthNoise(0.05, 0.05, 1500);
-                        haptic(12);
+                        // (chime moved to top of setTimeout)
                         // Drift pixels — scaled by proximity
                         const driftCount = Math.floor(50 * scale);
                         for (let i = 0; i < driftCount; i++) {
