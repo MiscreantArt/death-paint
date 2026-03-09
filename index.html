@@ -1897,8 +1897,8 @@
                 const pulse = Math.sin(this.bounce * 2) * 0.3 + 0.7;
                 ctx.globalAlpha = pulse;
                 
-                // Draw power-up icon — same size as owl sprites
-                const iconSize = 72; // Big and visible (player is 38, enemies 36)
+                // Draw power-up icon — chromie is smaller since it's more common-looking
+                const iconSize = this.type === 'chromie' ? 24 : 72;
                 const halfIcon = iconSize / 2;
                 const bounceY = Math.sin(this.bounce) * 4;
                 
@@ -2136,7 +2136,7 @@
                             // Power-up drop: ~12% per kill
                             if (Math.random() < 0.12) {
                                 const r = Math.random();
-                                const dropType = r < 0.33 ? 'duck' : r < 0.66 ? 'chromie' : 'skully';
+                                const dropType = r < 0.40 ? 'duck' : r < 0.80 ? 'skully' : 'chromie'; // chromie rarest (20%)
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
                             }
