@@ -1846,7 +1846,7 @@
                         // Next 4 kills explode all black + vignette
                         playSound('skully-activate');
                         haptic([30, 15, 30]);
-                        playerBuffs.skully = 4; // Kill count, not time
+                        playerBuffs.skully = 5; // Kill count, not time
                         break;
                     case 'halo':
                         // Immunity for 8s
@@ -2559,8 +2559,8 @@
                 // Skully vignette — subtle dark edges when active
                 if (playerBuffs.skully > 0) {
                     const vGrad = ctx.createRadialGradient(
-                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.55,
-                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.85
+                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.75,
+                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 1.0
                     );
                     vGrad.addColorStop(0, 'rgba(0,0,0,0)');
                     vGrad.addColorStop(1, 'rgba(0,0,0,0.3)');
