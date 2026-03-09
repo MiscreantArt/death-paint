@@ -172,6 +172,7 @@
         let zoneLabelsVisible = 0;
         let tutorialOverlay = 0; // frames remaining for intro control overlay
         let tutorialDismissed = false;
+        let hasPlayedOnce = false; // skip tutorial on replays
         
         // Auto-fire system
         let lastAutoFireTime = 0;
@@ -2620,26 +2621,32 @@
                     ctx.lineTo(halfW, canvas.height);
                     ctx.stroke();
                     
-                    const fontSize = Math.max(18, Math.floor(canvas.width / 20));
-                    const subSize = Math.max(13, Math.floor(fontSize * 0.65));
+                    const fontSize = Math.max(26, Math.floor(canvas.width / 12));
+                    const subSize = Math.max(16, Math.floor(fontSize * 0.55));
                     ctx.textAlign = 'center';
                     
                     // Left text
                     ctx.globalAlpha = alpha;
                     ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
                     ctx.fillStyle = '#ffffff';
-                    ctx.fillText('MOVE', halfW / 2, cy - 8);
+                    ctx.shadowColor = 'rgba(255,255,255,0.5)';
+                    ctx.shadowBlur = 8;
+                    ctx.fillText('MOVE', halfW / 2, cy - 10);
+                    ctx.shadowBlur = 0;
                     ctx.font = `${subSize}px 'Courier New', monospace`;
-                    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                    ctx.fillText('hold + drag', halfW / 2, cy + subSize + 4);
+                    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                    ctx.fillText('hold + drag', halfW / 2, cy + subSize + 8);
                     
                     // Right text
                     ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
                     ctx.fillStyle = '#ffffff';
-                    ctx.fillText('SHOOT', halfW + halfW / 2, cy - 8);
+                    ctx.shadowColor = 'rgba(255,255,255,0.5)';
+                    ctx.shadowBlur = 8;
+                    ctx.fillText('SHOOT', halfW + halfW / 2, cy - 10);
+                    ctx.shadowBlur = 0;
                     ctx.font = `${subSize}px 'Courier New', monospace`;
-                    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                    ctx.fillText('hold + aim', halfW + halfW / 2, cy + subSize + 4);
+                    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                    ctx.fillText('hold + aim', halfW + halfW / 2, cy + subSize + 8);
                     
                     ctx.globalAlpha = 1;
                     ctx.restore();
@@ -2701,37 +2708,40 @@
             menuParticles = [];
             const cx = canvas.width / 2;
             const cy = canvas.height * 0.42;
-            // Big radial burst — paint splats
-            for (let i = 0; i < 180; i++) {
+            // Dense core — fat pixels like grunt death
+            for (let i = 0; i < 300; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const speed = 0.3 + Math.random() * 2.5;
-                const dist = 20 + Math.random() * 60;
+                const dist = Math.random() * 60;
                 menuParticles.push({
                     x: cx + Math.cos(angle) * dist,
                     y: cy + Math.sin(angle) * dist,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    size: 2 + Math.random() * 8,
+                    size: 2 + Math.random() * 3,
                     color: menuColors[Math.floor(Math.random() * menuColors.length)],
-                    alpha: 0.6 + Math.random() * 0.4,
-                    settled: false,
-                    settleTimer: 30 + Math.random() * 60
+                    alpha: 0.7 + Math.random() * 0.3
                 });
             }
-            // Scattered confetti around edges
-            for (let i = 0; i < 80; i++) {
+            // Medium mid ring
+            for (let i = 0; i < 200; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = 100 + Math.random() * 200;
+                const dist = 50 + Math.random() * 100;
                 menuParticles.push({
                     x: cx + Math.cos(angle) * dist,
                     y: cy + Math.sin(angle) * dist,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    size: 1 + Math.random() * 4,
+                    size: 1.2 + Math.random() * 2,
                     color: menuColors[Math.floor(Math.random() * menuColors.length)],
-                    alpha: 0.3 + Math.random() * 0.5,
-                    settled: true,
-                    settleTimer: 0
+                    alpha: 0.5 + Math.random() * 0.4
+                });
+            }
+            // Tiny outer fling
+            for (let i = 0; i < 150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 120 + Math.random() * 180;
+                menuParticles.push({
+                    x: cx + Math.cos(angle) * dist,
+                    y: cy + Math.sin(angle) * dist,
+                    size: 0.5 + Math.random() * 1.2,
+                    color: menuColors[Math.floor(Math.random() * menuColors.length)],
+                    alpha: 0.3 + Math.random() * 0.4
                 });
             }
         }
@@ -2746,21 +2756,11 @@
                 menuParticlesSpawned = true;
             }
 
-            // Draw & update menu particles (behind title)
+            // Draw menu paint pixels (behind title) — static pixel squares like in-game paint
             menuParticles.forEach(p => {
-                if (!p.settled) {
-                    p.x += p.vx;
-                    p.y += p.vy;
-                    p.vx *= 0.97;
-                    p.vy *= 0.97;
-                    p.settleTimer--;
-                    if (p.settleTimer <= 0) p.settled = true;
-                }
                 ctx.globalAlpha = p.alpha;
                 ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
             });
             ctx.globalAlpha = 1;
 
@@ -3259,8 +3259,8 @@
             if (zoneLabelsVisible === 0) {
                 zoneLabelsVisible = 180; // 3 seconds at 60fps
             }
-            // Dismiss tutorial overlay on first touch (but not in first 500ms — ignore the menu tap bleeding through)
-            if (!tutorialDismissed && tutorialOverlay > 0 && (Date.now() - gameStartTime) > 500) {
+            // Dismiss tutorial overlay on first touch (but not in first 1.5s — let them read it)
+            if (!tutorialDismissed && tutorialOverlay > 0 && (Date.now() - gameStartTime) > 1500) {
                 if (tutorialOverlay > 40) tutorialOverlay = 40; // start fade-out
                 tutorialDismissed = true;
             }
@@ -3505,8 +3505,11 @@
             rightZone.touchId = null;
             rightZone.currentDirection = { x: 0, y: 0, angle: 0 };
             zoneLabelsVisible = 0;
-            tutorialOverlay = 180; // 3 seconds at 60fps
-            tutorialDismissed = false;
+            if (!hasPlayedOnce) {
+                tutorialOverlay = 240; // 4 seconds at 60fps — give time to read
+                tutorialDismissed = false;
+            }
+            hasPlayedOnce = true;
             lastAutoFireTime = 0;
             
             // Initialize stars and reset continuous spawning
