@@ -2107,11 +2107,10 @@
                             playSound('enemy-death');
                             playSound('kill-sound');
                             
-                            // Power-up drop chance: 12% for grunts, 30% for greens, 50% for bosses
-                            const dropChance = enemy.isBoss ? 0.5 : enemy.isGreen ? 0.3 : 0.12;
+                            // Duck power-up drop: 10% from grunts, 25% from greens/bosses
+                            const dropChance = (enemy.isGreen || enemy.isBoss) ? 0.25 : 0.10;
                             if (Math.random() < dropChance) {
-                                const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
-                                powerUps.push(new PowerUp(enemy.x, enemy.y, type.type));
+                                powerUps.push(new PowerUp(enemy.x, enemy.y, 'duck'));
                                 playSound('powerup-spawn');
                             }
                             
@@ -2157,11 +2156,10 @@
                         playSound('enemy-death');
                         playSound('kill-sound');
                         
-                        // Power-up drop on skully kill
-                        const dropChance2 = enemy.isBoss ? 0.5 : enemy.isGreen ? 0.3 : 0.12;
+                        // Duck power-up drop on skully kill
+                        const dropChance2 = (enemy.isGreen || enemy.isBoss) ? 0.25 : 0.10;
                         if (Math.random() < dropChance2) {
-                            const type2 = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
-                            powerUps.push(new PowerUp(enemy.x, enemy.y, type2.type));
+                            powerUps.push(new PowerUp(enemy.x, enemy.y, 'duck'));
                             playSound('powerup-spawn');
                         }
                         
