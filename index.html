@@ -1679,9 +1679,9 @@
             draw() {
                 ctx.save();
                 
-                // Duck projectile — directional duck image
+                // Duck projectile — directional duck image (same size as bird sprites)
                 if (this.isDuck) {
-                    const duckSize = 28;
+                    const duckSize = 36;
                     // Pick sprite based on shoot direction
                     let duckDir = 'right'; // default
                     if (this.duckDir === 'west') duckDir = 'left';
@@ -1797,9 +1797,11 @@
                 
                 switch (this.type) {
                     case 'chromie':
-                        // Instant: Expanding circle wave kills all enemies
+                        // Rainbow trail + swap to chrome robot (#12)
                         playSound('chromie-shockwave');
-                        this.createChromieWave();
+                        rainbowActive = true;
+                        rainbowTimer = RAINBOW_DURATION;
+                        rainbowHue = 0;
                         break;
                     case 'crown':
                         // Instant: +500 score
@@ -2078,22 +2080,6 @@
             // No player trail during duck mode — trail comes from the projectiles instead
             
             const now = Date.now();
-            
-            // Update chrome drops — check pickup + animate
-            for (let i = chromeDrops.length - 1; i >= 0; i--) {
-                const drop = chromeDrops[i];
-                drop.hue = (drop.hue + 3) % 360;
-                // Despawn after 10 seconds
-                if (now - drop.born > 10000) { chromeDrops.splice(i, 1); continue; }
-                // Check player pickup
-                const dx = player.x - drop.x, dy = player.y - drop.y;
-                if (Math.sqrt(dx*dx + dy*dy) < player.size + drop.size) {
-                    rainbowActive = true;
-                    rainbowTimer = RAINBOW_DURATION;
-                    rainbowHue = 0;
-                    chromeDrops.splice(i, 1);
-                }
-            }
             
             // Update power-ups
             powerUps = powerUps.filter(p => !p.update());
