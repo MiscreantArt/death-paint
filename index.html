@@ -125,7 +125,7 @@
         }
         let lives = 3;
         let screenShake = 0;
-        let testMode = true; // Test mode always on
+
         
         // Game progression features
         let gameTime = 0; // Game time in seconds for progressive difficulty
@@ -177,21 +177,19 @@
         
         // Continuous enemy spawning system
         let lastEnemySpawnTime = 0;
-        let nextSpawnDelay = 1500;
+
         let maxEnemiesOnScreen = 12; // Starts chill, grows over time
         
-        // Grunt trait definitions — each grunt has unique movement personality
-        // Grunt traits — disabled (all walk straight at player)
-        const gruntTraits = {};
+
         
         // Game objects arrays
         let player;
         let enemies = [];
         let projectiles = [];
-        let enemyProjectiles = [];
+
         let powerUps = [];
         let particles = [];
-        let rainParticles = [];
+
         let fireTrails = [];
         // Offscreen bitmap — trails get baked here each frame to prevent array bloat
         let paintCanvas = null;
@@ -1129,7 +1127,7 @@
             shoot(forceAngle = null) {
                 // Use forced angle (mobile auto-fire) or mouse position (desktop)
                 const angle = forceAngle !== null ? forceAngle : Math.atan2(mouse.y - this.y, mouse.x - this.x);
-                this.lastAimAngle = angle; // Track for shy grunt trait
+
                 const damage = playerBuffs.flame > 0 ? 2 : 1;
                 
                 // Laser spawns from the bird's eyes — fixed position based on facing
@@ -1374,8 +1372,7 @@
                 
                 this.animFrame = 0;
                 this.animTime = 0;
-                this.lastShot = 0;
-                this.shootDelay = 2000 + Math.random() * 3000;
+
                 this.angle = 0;
                 this.currentDirection = 'east'; // Track current facing direction
                 
@@ -1405,7 +1402,7 @@
                 const dx = player.x - this.x;
                 const dy = player.y - this.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                this.traitTimer = (this.traitTimer || 0) + 1;
+
                 
                 if (dist > 0) {
                     // Apply raincloud slowing effect and progressive difficulty
@@ -1463,22 +1460,7 @@
                 }
             }
             
-            shoot() {
-                const angle = Math.atan2(player.y - this.y, player.x - this.x);
-                enemyProjectiles.push(new Projectile(this.x, this.y, angle, 2.8, 1, '#ff4400', true));
-                
-                // Muzzle flash
-                for (let i = 0; i < 3; i++) {
-                    particles.push(new Particle(
-                        this.x + Math.cos(angle) * 15,
-                        this.y + Math.sin(angle) * 15,
-                        Math.cos(angle) * 2 + (Math.random() - 0.5),
-                        Math.sin(angle) * 2 + (Math.random() - 0.5),
-                        '#ff4400',
-                        8
-                    ));
-                }
-            }
+
             
             takeDamage(damage, projectileAngle = null) {
                 this.health -= damage;
@@ -1998,7 +1980,7 @@
             } else {
                 // Continuous random spawning
                 // Spawn delay tightens over time: 1000ms → 500ms
-                nextSpawnDelay = Math.max(500, 1000 - gameTime * 3);
+                const nextSpawnDelay = Math.max(500, 1000 - gameTime * 3);
                 
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
                     spawnSingleEnemy();
@@ -3299,6 +3281,7 @@
             gameTime = 0;
             enemySpeedMultiplier = 1;
             playerSpeedBonus = 0;
+            maxEnemiesOnScreen = 12;
             
             // Reset player
             player = new Player(canvas.width / 2, canvas.height / 2);
@@ -3306,10 +3289,10 @@
             // Clear arrays
             enemies = [];
             projectiles = [];
-            enemyProjectiles = [];
+
             powerUps = [];
             particles = [];
-            rainParticles = [];
+
             fireTrails = [];
             // Init paint bitmap
             paintCanvas = document.createElement('canvas');
