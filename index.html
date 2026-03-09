@@ -345,7 +345,7 @@
             },
             'player-death': () => {
                 // Descending chimes — same style as game-over chord, pre-scheduled via AudioContext
-                const notes = [1047, 988, 880, 784, 659, 587];
+                const notes = [1047, 988, 880, 784, 659, 587, 523, 440, 392, 330];
                 const t = audioCtx.currentTime;
                 notes.forEach((freq, i) => {
                     const noteTime = t + 0.08 + i * 0.25;
