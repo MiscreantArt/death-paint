@@ -123,7 +123,6 @@
             }, celebNotes.length * 80);
             haptic([15, 10, 15, 10, 15, 10, 30]);
         }
-        let lives = 3;
         let screenShake = 0;
 
         
@@ -197,9 +196,7 @@
         // Offscreen bitmap — trails get baked here each frame to prevent array bloat
         let paintCanvas = null;
         let paintCtx = null;
-        let groundFlames = [];
         let stars = [];
-        let activeChromieWave = null;
         
         // ===== SOUND SYSTEM (Synthesized — musical & pleasing) =====
         let audioCtx = null;
@@ -398,12 +395,7 @@
                 synthTone(330, 0.5, 0.08, 'triangle', 1320);
                 haptic([20, 10, 20, 10, 40]);
             },
-            'crown-collect': () => {
-                // Royal fanfare — major chord
-                synthChord([523, 659, 784], 0.2, 0.15, 'sine');
-                setTimeout(() => synthChord([784, 988, 1175], 0.3, 0.12, 'sine'), 150);
-                haptic(25);
-            },
+
             'duck-quack': () => {
                 // Real quack sound
                 const quack = new Audio('sounds/duck-quack.wav');
@@ -411,18 +403,8 @@
                 quack.play().catch(() => {});
                 haptic(15);
             },
-            'flame-activate': () => {
-                // Whoosh ignition
-                synthNoise(0.3, 0.12, 5000);
-                synthTone(200, 0.2, 0.1, 'sawtooth', 600);
-                haptic([10, 5, 10, 5, 30]);
-            },
-            'halo-activate': () => {
-                // Ethereal shimmer
-                synthChord([880, 1109, 1319], 0.4, 0.1, 'sine');
-                synthTone(1760, 0.3, 0.05, 'sine', 880);
-                haptic(20);
-            },
+
+
             'skully-activate': () => {
                 // Creepy dissonant ping — minor second + descending undertone
                 synthTone(330, 0.4, 0.1, 'sine');           // eerie high ping
@@ -432,12 +414,7 @@
                 synthNoise(0.15, 0.04, 800);                 // breath of static
                 haptic([30, 15, 30]);
             },
-            'raincloud-activate': () => {
-                // Gentle rain shimmer
-                synthNoise(0.3, 0.08, 2000);
-                synthTone(660, 0.2, 0.06, 'sine', 330);
-                haptic(15);
-            },
+
             'menu-tap': () => {
                 // Clean click
                 synthTone(800, 0.04, 0.1, 'sine');
@@ -492,9 +469,7 @@
             enemySheets: {},
             powerUpBirdSheets: {},
             powerUps: {},
-            laser: null,
-            flame: null,
-            flameWalk: []
+            laser: null
         };
         
         // Row mapping for sprite sheet layout
@@ -524,24 +499,15 @@
         
         // Power-up types with moonbird mapping
         const powerUpTypes = [
-            { type: 'chromie', birdId: 12, color: '#ff00ff', duration: 0 },    // Circle wave kills all enemies
-            { type: 'crown', birdId: 952, color: '#ffd700', duration: 0 },     // Score reward (instant +500)
-            { type: 'diamond', birdId: 9619, color: '#00ccff', duration: 15000 }, // Double points
+            { type: 'chromie', birdId: 12, color: '#ff00ff', duration: 0 },    // Rainbow trail + shockwave sound
             { type: 'duck', birdId: 5568, color: '#ffdd00', duration: 4000 },    // Duck noises — cute then gone
-            { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 },  // Death touch - melee kills, but vulnerable to shots
-            { type: 'halo', birdId: 6295, color: '#ffd700', duration: 8000 },    // Immunity - can't take damage
-            { type: 'raincloud', birdId: 429, color: '#aaccff', duration: 10000 }, // Rain - slows all enemies
-            { type: 'flame', birdId: 7861, color: '#ff4400', duration: 10000 }     // Animated flame - damage boost
+            { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 }  // Death touch - melee kills, but vulnerable to shots
         ];
         
         // Player buffs
         let playerBuffs = {
-            diamond: 0,  // Double points
             duck: 0,     // Cosmetic duck noises
-            skully: 0,   // Next N kills explode black
-            halo: 0,     // Immunity
-            raincloud: 0, // Slow enemies
-            flame: 0     // Damage boost
+            skully: 0    // Next N kills explode black
         };
         
         // Sprite loading - updated for sprite sheets
@@ -571,8 +537,7 @@
         
         // Power-up bird map for hero sprite swapping
         const powerUpBirdMap = {
-            'diamond': 9619, 'duck': 5568, 'skully': 8677, 'halo': 6295,
-            'raincloud': 429, 'flame': 7861, 'crown': 952, 'chromie': 12
+            'duck': 5568, 'skully': 8677, 'chromie': 12
         };
         
         // Load power-up icons
@@ -962,32 +927,7 @@
             }
         }
         
-        // Rain particle for raincloud power-up
-        class RainParticle {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.vy = 3 + Math.random() * 2;
-                this.length = 4 + Math.random() * 2; // FIXED: Shorter rain streaks (4-6px)
-            }
-            
-            update() {
-                this.y += this.vy;
-                return this.y > canvas.height + 10;
-            }
-            
-            draw() {
-                ctx.save();
-                ctx.strokeStyle = '#aaccff';
-                ctx.lineWidth = 1;
-                ctx.globalAlpha = 0.3; // FIXED: More subtle rain (0.3 opacity)
-                ctx.beginPath();
-                ctx.moveTo(this.x, this.y);
-                ctx.lineTo(this.x, this.y + this.length);
-                ctx.stroke();
-                ctx.restore();
-            }
-        }
+
         
         // Fire trail left by enemies
         class FireTrail {
@@ -1009,41 +949,7 @@
             }
         }
         
-        // GroundFlame class for persistent ground flames
-        class GroundFlame {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.life = 360; // 6 seconds at 60fps
-                this.maxLife = 360;
-                this.size = 5 + Math.random() * 3;
-                this.color = pixelColors[Math.floor(Math.random() * pixelColors.length)];
-                this.pulseOffset = Math.random() * Math.PI * 2;
-            }
-            
-            update() {
-                this.life--;
-                return this.life <= 0;
-            }
-            
-            draw() {
-                const alpha = Math.min(1, this.life / (this.maxLife * 0.2)) * 0.6;
-                const pulse = 0.8 + Math.sin(performance.now() * 0.005 + this.pulseOffset) * 0.2;
-                const sz = this.size * pulse * (0.5 + 0.5 * (this.life / this.maxLife));
-                
-                ctx.save();
-                ctx.globalAlpha = alpha;
-                
-                // Glowing colorful pixel square
-                ctx.fillStyle = this.color;
-                ctx.shadowBlur = 6;
-                ctx.shadowColor = this.color;
-                ctx.fillRect(this.x - sz, this.y - sz, sz * 2, sz * 2);
-                
-                ctx.shadowBlur = 0;
-                ctx.restore();
-            }
-        }
+
         
 
         
@@ -1092,7 +998,7 @@
                         dy /= length;
                     }
                     
-                    const speed = (this.speed + playerSpeedBonus) * (playerBuffs.speed > 0 ? 1.5 : 1);
+                    const speed = this.speed + playerSpeedBonus;
                     this.x += dx * speed;
                     this.y += dy * speed;
                     
@@ -1187,7 +1093,7 @@
                 // Use forced angle (mobile auto-fire) or mouse position (desktop)
                 const angle = forceAngle !== null ? forceAngle : Math.atan2(mouse.y - this.y, mouse.x - this.x);
 
-                const damage = playerBuffs.flame > 0 ? 2 : 1;
+                const damage = 1;
                 
                 // Laser spawns from the bird's eyes — fixed position based on facing
                 // Eyes are ~30% from top of sprite (y - size*0.3 above center)
@@ -1256,22 +1162,7 @@
             }
             
             takeDamage() {
-                // Halo immunity - no damage from anything
-                if (playerBuffs.halo > 0) {
-                    // Show immunity effect
-                    for (let i = 0; i < 10; i++) {
-                        particles.push(new Particle(
-                            this.x + (Math.random() - 0.5) * 50,
-                            this.y + (Math.random() - 0.5) * 50,
-                            (Math.random() - 0.5) * 2,
-                            (Math.random() - 0.5) * 2,
-                            '#ffd700',
-                            15,
-                            2
-                        ));
-                    }
-                    return;
-                }
+
                 
                 this.health--;
                 screenShake = 10;
@@ -1314,7 +1205,7 @@
                 
                 // Draw sprite using sprite sheets
                 // Determine which sprite sheet to use based on active power-ups
-                // Priority: skully > halo > duck > raincloud > flame > diamond (most visually distinctive first)
+                // Priority: skully > duck (most visually distinctive first)
                 const animationType = this.isMoving ? 'walk' : 'idle';
                 let spriteSheet = sprites.heroSheet;
                 
@@ -1325,16 +1216,8 @@
                     forceEast = true;
                 } else if (playerBuffs.skully > 0 && sprites.powerUpBirdSheets.skully && sprites.powerUpBirdSheets.skully.complete) {
                     spriteSheet = sprites.powerUpBirdSheets.skully;
-                } else if (playerBuffs.halo > 0 && sprites.powerUpBirdSheets.halo && sprites.powerUpBirdSheets.halo.complete) {
-                    spriteSheet = sprites.powerUpBirdSheets.halo;
                 } else if (playerBuffs.duck > 0 && sprites.powerUpBirdSheets.duck && sprites.powerUpBirdSheets.duck.complete) {
                     spriteSheet = sprites.powerUpBirdSheets.duck;
-                } else if (playerBuffs.raincloud > 0 && sprites.powerUpBirdSheets.raincloud && sprites.powerUpBirdSheets.raincloud.complete) {
-                    spriteSheet = sprites.powerUpBirdSheets.raincloud;
-                } else if (playerBuffs.flame > 0 && sprites.powerUpBirdSheets.flame && sprites.powerUpBirdSheets.flame.complete) {
-                    spriteSheet = sprites.powerUpBirdSheets.flame;
-                } else if (playerBuffs.diamond > 0 && sprites.powerUpBirdSheets.diamond && sprites.powerUpBirdSheets.diamond.complete) {
-                    spriteSheet = sprites.powerUpBirdSheets.diamond;
                 }
                 
                 // Use the drawSprite helper function
@@ -1472,9 +1355,8 @@
 
                 
                 if (dist > 0) {
-                    // Apply raincloud slowing effect and progressive difficulty
-                    const raincloudslow = playerBuffs.raincloud > 0 ? 0.4 : 1;
-                    const finalSpeed = this.speed * enemySpeedMultiplier * raincloudslow;
+                    // Apply progressive difficulty
+                    const finalSpeed = this.speed * enemySpeedMultiplier;
                     this.x += (dx / dist) * finalSpeed;
                     this.y += (dy / dist) * finalSpeed;
                     this.angle = Math.atan2(dy, dx);
@@ -1492,13 +1374,7 @@
                         ));
                     }
                     
-                    // Drop ground flames less frequently (every 12 frames, cap at 150)
-                    if (this.animTime % 12 === 0 && groundFlames.length < 150) {
-                        groundFlames.push(new GroundFlame(
-                            this.x + (Math.random() - 0.5) * 14,
-                            this.y + this.size * 0.4
-                        ));
-                    }
+
                 }
                 
                 // Animation — fast legs to match speed
@@ -1630,24 +1506,13 @@
             draw() {
                 ctx.save();
                 
-                if (this.isEnemy && sprites.flameWalk && sprites.flameWalk.length > 0) {
-                    // Add glow for enemy projectiles
-                    ctx.shadowBlur = 8;
-                    ctx.shadowColor = '#ff4400';
-                    
-                    // Draw animated flame sprite for enemy projectiles (no rotation)
-                    const frame = sprites.flameWalk[this.animFrame % sprites.flameWalk.length] || sprites.flame;
-                    ctx.translate(this.x, this.y + Math.sin(this.bounce) * 2);
-                    ctx.drawImage(frame, -9, -9, 18, 18);
-                } else {
-                    // This shouldn't be used for player projectiles anymore (using LaserBeam instead)
-                    ctx.strokeStyle = this.color;
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.moveTo(this.x, this.y);
-                    ctx.lineTo(this.x - this.vx * 3, this.y - this.vy * 3);
-                    ctx.stroke();
-                }
+                // This shouldn't be used for player projectiles anymore (using LaserBeam instead)
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - this.vx * 3, this.y - this.vy * 3);
+                ctx.stroke();
                 
                 ctx.restore();
             }
@@ -1824,18 +1689,6 @@
                         rainbowTimer = RAINBOW_DURATION;
                         rainbowHue = 0;
                         break;
-                    case 'crown':
-                        // Instant: +500 score
-                        playSound('crown-collect');
-                        const crownPoints = 500 * (playerBuffs.diamond > 0 ? 2 : 1);
-                        score += crownPoints;
-                        this.createCrownBurst();
-                        break;
-                    case 'diamond':
-                        // Double points for 15s
-                        playSound('powerup-collect');
-                        playerBuffs.diamond = powerUp.duration;
-                        break;
                     case 'duck':
                         // Duck mode — shoot duck projectiles, yellow trail, quack sounds
                         playSound('duck-quack');
@@ -1847,21 +1700,6 @@
                         playSound('skully-activate');
                         haptic([30, 15, 30]);
                         playerBuffs.skully = 5; // Kill count, not time
-                        break;
-                    case 'halo':
-                        // Immunity for 8s
-                        playSound('halo-activate');
-                        playerBuffs.halo = powerUp.duration;
-                        break;
-                    case 'raincloud':
-                        // Slow enemies for 10s
-                        playSound('raincloud-activate');
-                        playerBuffs.raincloud = powerUp.duration;
-                        break;
-                    case 'flame':
-                        // Damage boost for 10s
-                        playSound('flame-activate');
-                        playerBuffs.flame = powerUp.duration;
                         break;
                 }
                 
@@ -1879,34 +1717,9 @@
                 }
             }
             
-            createChromieWave() {
-                // Create expanding colorful circle wave that kills all enemies
-                // Stored as global state so it renders UNDER enemies in the main draw loop
-                activeChromieWave = {
-                    x: player.x,
-                    y: player.y,
-                    radius: 0,
-                    maxRadius: Math.max(canvas.width, canvas.height),
-                    speed: 8,
-                    colors: ['#ff00ff', '#ff4400', '#ffff00', '#00ff00', '#00ffff', '#0044ff'],
-                    colorIndex: 0
-                };
-            }
+
             
-            createCrownBurst() {
-                // Create big gold particle burst for score reward
-                for (let i = 0; i < 30; i++) {
-                    particles.push(new Particle(
-                        player.x + (Math.random() - 0.5) * 60,
-                        player.y + (Math.random() - 0.5) * 60,
-                        (Math.random() - 0.5) * 8,
-                        (Math.random() - 0.5) * 8,
-                        '#ffd700',
-                        40,
-                        4
-                    ));
-                }
-            }
+
             
             draw() {
                 const powerUp = powerUpTypes.find(p => p.type === this.type);
@@ -1921,24 +1734,15 @@
                 const halfIcon = iconSize / 2;
                 const bounceY = Math.sin(this.bounce) * 6; // gentle float
                 
-                // Special handling for flame power-up - use animated walk cycle
-                if (this.type === 'flame' && sprites.flameWalk && sprites.flameWalk.length > 0) {
-                    const frameIndex = Math.floor(this.bounce * 0.5) % sprites.flameWalk.length;
-                    const frameSprite = sprites.flameWalk[frameIndex];
-                    if (frameSprite) {
-                        ctx.drawImage(frameSprite, this.x - halfIcon, this.y - halfIcon + bounceY, iconSize, iconSize);
-                    }
+                const spriteIcon = sprites.powerUps[this.type];
+                if (spriteIcon && spriteIcon.complete) {
+                    ctx.drawImage(spriteIcon, this.x - halfIcon, this.y - halfIcon + bounceY, iconSize, iconSize);
                 } else {
-                    const spriteIcon = sprites.powerUps[this.type];
-                    if (spriteIcon && spriteIcon.complete) {
-                        ctx.drawImage(spriteIcon, this.x - halfIcon, this.y - halfIcon + bounceY, iconSize, iconSize);
-                    } else {
-                        // Fallback colored circle
-                        ctx.fillStyle = powerUp.color;
-                        ctx.beginPath();
-                        ctx.arc(this.x, this.y + bounceY, 20, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
+                    // Fallback colored circle
+                    ctx.fillStyle = powerUp.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y + bounceY, 20, 0, Math.PI * 2);
+                    ctx.fill();
                 }
                 
                 ctx.restore();
@@ -2049,22 +1853,6 @@
                 playerBuffs.duck -= buffDt;
                 if (playerBuffs.duck <= 0) { playerBuffs.duck = 0; playSound('powerup-expire'); }
             }
-            if (playerBuffs.diamond > 0) {
-                playerBuffs.diamond -= buffDt;
-                if (playerBuffs.diamond <= 0) { playerBuffs.diamond = 0; playSound('powerup-expire'); }
-            }
-            if (playerBuffs.halo > 0) {
-                playerBuffs.halo -= buffDt;
-                if (playerBuffs.halo <= 0) { playerBuffs.halo = 0; playSound('powerup-expire'); }
-            }
-            if (playerBuffs.raincloud > 0) {
-                playerBuffs.raincloud -= buffDt;
-                if (playerBuffs.raincloud <= 0) { playerBuffs.raincloud = 0; playSound('powerup-expire'); }
-            }
-            if (playerBuffs.flame > 0) {
-                playerBuffs.flame -= buffDt;
-                if (playerBuffs.flame <= 0) { playerBuffs.flame = 0; playSound('powerup-expire'); }
-            }
             
             // === SPAWNING ===
             const currentTime = Date.now();
@@ -2150,8 +1938,8 @@
                             else if (enemy.tier === 4) basePoints = 500;
                             else if (enemy.tier === 5) basePoints = 1000;
                             
-                            // Apply diamond doubling only
-                            const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
+                            // Apply base points
+                            const points = basePoints;
                             score += points;
                             killCount++;
                             onEnemyKill(enemy.tier);
@@ -2548,52 +2336,7 @@
                     });
                     fireTrails = [];
                 }
-                // Update and draw chromie wave UNDER enemies
-                if (activeChromieWave) {
-                    const wave = activeChromieWave;
-                    wave.radius += wave.speed;
-                    wave.colorIndex = (wave.colorIndex + 0.2) % wave.colors.length;
-                    
-                    // Check collision with enemies
-                    for (let i = enemies.length - 1; i >= 0; i--) {
-                        const enemy = enemies[i];
-                        const dx = enemy.x - wave.x;
-                        const dy = enemy.y - wave.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (dist <= wave.radius && dist >= wave.radius - wave.speed) {
-                            let basePoints = 100;
-                            if (enemy.tier === 2) basePoints = 200;
-                            else if (enemy.tier === 3) basePoints = 300;
-                            else if (enemy.tier === 4) basePoints = 500;
-                            else if (enemy.tier === 5) basePoints = 1000;
-                            
-                            const points = basePoints * (playerBuffs.diamond > 0 ? 2 : 1);
-                            score += points;
-                            killCount++;
-                            onEnemyKill(enemy.tier);
-                            
-                            if (enemy.isDarkBoss) spawnDarkSplat(enemy.x, enemy.y); else if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y); else if (enemy.isGreen) spawnGreenSplat(enemy.x, enemy.y); else spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
-                            
-                            playSound('enemy-death');
-                            playSound('kill-sound');
-                            enemies.splice(i, 1);
-                        }
-                    }
-                    
-                    // Draw the wave (renders under enemies)
-                    ctx.save();
-                    ctx.strokeStyle = wave.colors[Math.floor(wave.colorIndex)];
-                    ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.restore();
-                    
-                    if (wave.radius >= wave.maxRadius) {
-                        activeChromieWave = null;
-                    }
-                }
+
                 
                 particles.forEach(particle => particle.draw());
                 projectiles.forEach(proj => proj.draw());
@@ -3535,7 +3278,6 @@
             startMusic();
             score = 0;
             killCount = 0;
-            lives = 3;
             
             // Reset game variables
             gameStartTime = Date.now();
@@ -3560,16 +3302,11 @@
             paintCanvas.width = canvas.width;
             paintCanvas.height = canvas.height;
             paintCtx = paintCanvas.getContext('2d');
-            groundFlames = [];
             
             // Reset buffs
             playerBuffs = {
-                diamond: 0,
                 duck: 0,
-                skully: 0,
-                halo: 0,
-                raincloud: 0,
-                flame: 0
+                skully: 0
             };
             
             // Reset touch controls
