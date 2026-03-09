@@ -569,6 +569,10 @@
             'raincloud': 429, 'flame': 7861, 'crown': 952, 'chromie': 12
         };
         
+        // Load power-up icons
+        sprites.powerUps.duck = new Image();
+        sprites.powerUps.duck.src = 'assets/powerup-duck.png';
+        
         // Lazy-load power-up bird sprite sheets on first collect
         function loadPowerUpBird(powerUpType) {
             if (sprites.powerUpBirdSheets[powerUpType]) return;
