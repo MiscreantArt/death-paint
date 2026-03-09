@@ -2369,6 +2369,24 @@
                         synthTone(deathNote * 0.5, 0.15, 0.04, 'sine');
                         synthNoise(0.05, 0.05, 1500);
                         haptic(12);
+                        // Drift pixels — expand outward but contained
+                        for (let i = 0; i < 40; i++) {
+                            const a = Math.random() * Math.PI * 2;
+                            const isGlob = Math.random() < 0.3;
+                            const spd = isGlob ? (0.5 + Math.random() * 1.2) : (1.5 + Math.random() * 2.5);
+                            const sz = isGlob ? (2.5 + Math.random() * 3) : (1 + Math.random() * 2);
+                            dyingDriftPixels.push({
+                                x: enemy.x + (Math.random()-0.5)*12,
+                                y: enemy.y + (Math.random()-0.5)*12,
+                                vx: Math.cos(a) * spd,
+                                vy: Math.sin(a) * spd,
+                                size: sz,
+                                decay: 0.96,
+                                color: pixelColors[Math.floor(Math.random() * pixelColors.length)],
+                                life: 60 + Math.random() * 50,
+                                shifting: false
+                            });
+                        }
                     }, 80 + idx * 100); // stagger explosions ~100ms apart
                 });
                 
