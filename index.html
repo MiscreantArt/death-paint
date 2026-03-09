@@ -246,6 +246,20 @@
             o.connect(g); g.connect(audioCtx.destination);
             o.start(t); o.stop(t + dur);
         }
+        // Schedule a tone in the future using AudioContext timing (works on iOS)
+        function synthToneAt(delayMs, freq, dur, vol, type) {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime + delayMs / 1000;
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = type || 'sine';
+            o.frequency.setValueAtTime(freq, t);
+            g.gain.setValueAtTime(0, audioCtx.currentTime);
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(t); o.stop(t + dur);
+        }
 
         function synthNoise(dur, vol, filterFreq) {
             if (!audioCtx) return;
@@ -2301,6 +2315,13 @@
                     return Math.sqrt(dx*dx + dy*dy);
                 }), 1);
                 
+                // Pre-schedule ALL death chimes now via AudioContext (iOS-safe)
+                enemyCopy.forEach((enemy, idx) => {
+                    const deathNote = deathScale[idx % deathScale.length];
+                    const delay = 80 + idx * 100;
+                    synthToneAt(delay, deathNote, 0.5, 0.3, 'sine');
+                });
+                
                 enemyCopy.forEach((enemy, idx) => {
                     setTimeout(() => {
                         if (gameState !== 'dying') return;
@@ -2354,9 +2375,7 @@
                             fireTrails.push(t);
                         }
                         if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
-                        // Descending chime — ONE oscillator per enemy, no flooding
-                        const deathNote = deathScale[idx % deathScale.length];
-                        synthTone(deathNote, 0.4, 0.3, 'sine');
+                        // Chime is pre-scheduled via synthToneAt above
                         haptic(12);
                         // Drift pixels — scaled by proximity
                         const driftCount = Math.floor(50 * scale);
