@@ -343,34 +343,8 @@
                 haptic([30, 20, 30]);
             },
             'player-death': () => {
-                // THE FINAL BRUSHSTROKE — from the working version (20cdded)
-                synthNoise(0.2, 0.2, 4000);
-                synthTone(80, 0.15, 0.15, 'sine', 40);
-                synthTone(160, 0.1, 0.1, 'sine', 80);
-                setTimeout(() => {
-                    synthTone(131, 3.0, 0.1, 'sine');
-                    synthTone(262, 2.8, 0.12, 'sine');
-                }, 250);
-                setTimeout(() => {
-                    synthTone(330, 2.5, 0.1, 'sine');
-                    synthTone(392, 2.3, 0.09, 'sine');
-                    synthTone(494, 2.0, 0.07, 'sine');
-                }, 400);
-                setTimeout(() => {
-                    synthTone(523, 1.8, 0.08, 'sine');
-                    synthTone(659, 1.6, 0.06, 'sine');
-                    synthTone(784, 1.4, 0.05, 'sine');
-                }, 600);
-                setTimeout(() => {
-                    synthTone(1047, 1.2, 0.04, 'sine');
-                    synthTone(1319, 1.0, 0.03, 'sine');
-                    synthTone(1568, 0.8, 0.025, 'sine');
-                    synthTone(1976, 0.6, 0.015, 'sine');
-                }, 800);
-                setTimeout(() => {
-                    synthTone(262, 3.5, 0.06, 'sine');
-                    synthTone(131, 4.0, 0.04, 'sine');
-                }, 1000);
+                // Just a thud — death chimes handle the music
+                synthNoise(0.15, 0.15, 2000);
                 haptic([50, 30, 70, 40, 100]);
             },
             'game-over': () => {
