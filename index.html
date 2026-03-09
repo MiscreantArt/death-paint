@@ -2052,6 +2052,9 @@
                 }
             }
             
+            // Update power-ups
+            powerUps = powerUps.filter(p => !p.update());
+            
             // Update enemies
             enemies.forEach(enemy => enemy.update());
             
@@ -2103,6 +2106,15 @@
                             
                             playSound('enemy-death');
                             playSound('kill-sound');
+                            
+                            // Power-up drop chance: 12% for grunts, 30% for greens, 50% for bosses
+                            const dropChance = enemy.isBoss ? 0.5 : enemy.isGreen ? 0.3 : 0.12;
+                            if (Math.random() < dropChance) {
+                                const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+                                powerUps.push(new PowerUp(enemy.x, enemy.y, type.type));
+                                playSound('powerup-spawn');
+                            }
+                            
                             enemies.splice(eIndex, 1);
                         }
                         // Shooting a non-grunt (hit or kill) resets paint rain streak
@@ -2144,6 +2156,15 @@
                         
                         playSound('enemy-death');
                         playSound('kill-sound');
+                        
+                        // Power-up drop on skully kill
+                        const dropChance2 = enemy.isBoss ? 0.5 : enemy.isGreen ? 0.3 : 0.12;
+                        if (Math.random() < dropChance2) {
+                            const type2 = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+                            powerUps.push(new PowerUp(enemy.x, enemy.y, type2.type));
+                            playSound('powerup-spawn');
+                        }
+                        
                         enemies.splice(index, 1);
                     } else {
                         // Normal collision - player takes damage
@@ -2472,6 +2493,7 @@
                 particles.forEach(particle => particle.draw());
                 projectiles.forEach(proj => proj.draw());
                 enemies.forEach(enemy => enemy.draw());
+                powerUps.forEach(p => p.draw());
                 
                 // Draw paint rain
                 if (paintRainActive && paintRainDrops.length > 0) {
