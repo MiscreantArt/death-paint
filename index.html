@@ -2064,6 +2064,29 @@
             // Update game time and progressive difficulty
             gameTime = (Date.now() - gameStartTime) / 1000;
             
+            // Tick down time-based buffs (~16ms per frame at 60fps)
+            const buffDt = 16.67;
+            if (playerBuffs.duck > 0) {
+                playerBuffs.duck -= buffDt;
+                if (playerBuffs.duck <= 0) { playerBuffs.duck = 0; playSound('powerup-expire'); }
+            }
+            if (playerBuffs.diamond > 0) {
+                playerBuffs.diamond -= buffDt;
+                if (playerBuffs.diamond <= 0) { playerBuffs.diamond = 0; playSound('powerup-expire'); }
+            }
+            if (playerBuffs.halo > 0) {
+                playerBuffs.halo -= buffDt;
+                if (playerBuffs.halo <= 0) { playerBuffs.halo = 0; playSound('powerup-expire'); }
+            }
+            if (playerBuffs.raincloud > 0) {
+                playerBuffs.raincloud -= buffDt;
+                if (playerBuffs.raincloud <= 0) { playerBuffs.raincloud = 0; playSound('powerup-expire'); }
+            }
+            if (playerBuffs.flame > 0) {
+                playerBuffs.flame -= buffDt;
+                if (playerBuffs.flame <= 0) { playerBuffs.flame = 0; playSound('powerup-expire'); }
+            }
+            
             // === SPAWNING ===
             const currentTime = Date.now();
             
