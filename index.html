@@ -397,10 +397,14 @@
             },
 
             'duck-quack': () => {
-                // Real quack sound
-                const quack = new Audio('sounds/duck-quack.wav');
-                quack.volume = 0.5;
-                quack.play().catch(() => {});
+                // Preloaded quack — reuse single instance so it cuts clean
+                if (!soundDefs._quackAudio) {
+                    soundDefs._quackAudio = new Audio('sounds/duck-quack.wav');
+                    soundDefs._quackAudio.volume = 0.5;
+                }
+                const q = soundDefs._quackAudio;
+                q.currentTime = 0;
+                q.play().catch(() => {});
                 haptic(15);
             },
 
@@ -1851,7 +1855,12 @@
             const buffDt = 16.67;
             if (playerBuffs.duck > 0) {
                 playerBuffs.duck -= buffDt;
-                if (playerBuffs.duck <= 0) { playerBuffs.duck = 0; playSound('powerup-expire'); }
+                if (playerBuffs.duck <= 0) {
+                    playerBuffs.duck = 0;
+                    // Kill any lingering quack
+                    if (soundDefs._quackAudio) { soundDefs._quackAudio.pause(); soundDefs._quackAudio.currentTime = 0; }
+                    playSound('powerup-expire');
+                }
             }
             
             // === SPAWNING ===
