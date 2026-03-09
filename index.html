@@ -2161,9 +2161,12 @@
                         // Normal collision - player takes damage
                         playSound('player-hit');
                         player.takeDamage();
-                        streakCount = 0; // Reset kill streak on damage
-                        streakPure = true;
-                        soundDefs._killNote = 0; // Reset chime to first note
+                        // Non-grunt contact resets paint rain streak
+                        if (enemy.tier !== 1) {
+                            streakCount = 0;
+                            streakPure = true;
+                            soundDefs._killNote = 0;
+                        }
                         // Push enemy away
                         const length = Math.sqrt(distSq);
                         if (length > 0) {
