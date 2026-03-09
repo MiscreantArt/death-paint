@@ -2549,11 +2549,11 @@
                 // Skully vignette — subtle dark edges when active
                 if (playerBuffs.skully > 0) {
                     const vGrad = ctx.createRadialGradient(
-                        canvas.width/2, canvas.height/2, canvas.width * 0.35,
-                        canvas.width/2, canvas.height/2, canvas.width * 0.75
+                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.55,
+                        canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.85
                     );
                     vGrad.addColorStop(0, 'rgba(0,0,0,0)');
-                    vGrad.addColorStop(1, 'rgba(0,0,0,0.25)');
+                    vGrad.addColorStop(1, 'rgba(0,0,0,0.3)');
                     ctx.fillStyle = vGrad;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
