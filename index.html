@@ -344,42 +344,51 @@
             'player-death': () => {
                 // THE FINAL BRUSHSTROKE — grand, orchestral bloom
                 // 1. Impact — big paint splat, felt in the body
-                synthNoise(0.2, 0.2, 4000);
-                synthTone(80, 0.15, 0.15, 'sine', 40);  // sub bass hit
-                synthTone(160, 0.1, 0.1, 'sine', 80);
+                synthNoise(0.3, 0.25, 4000);
+                synthTone(80, 0.2, 0.2, 'sine', 40);    // sub bass hit
+                synthTone(160, 0.15, 0.12, 'sine', 80);
                 
-                // 2. Silence gap — let the impact breathe (200ms)
+                // 2. Silence gap — let the impact breathe (300ms)
                 
-                // 3. The Bloom — layered chord rises out of silence
+                // 3. The Bloom — layered chord rises out of silence (LOUDER, LONGER)
                 setTimeout(() => {
                     // Low foundation
-                    synthTone(131, 3.0, 0.1, 'sine');    // C3 — deep warmth
-                    synthTone(262, 2.8, 0.12, 'sine');   // C4 — body
-                }, 250);
+                    synthTone(131, 5.0, 0.15, 'sine');    // C3 — deep warmth
+                    synthTone(262, 4.5, 0.18, 'sine');    // C4 — body
+                }, 300);
                 setTimeout(() => {
                     // Chord fills in — Cmaj7 spreading upward
-                    synthTone(330, 2.5, 0.1, 'sine');    // E4
-                    synthTone(392, 2.3, 0.09, 'sine');   // G4
-                    synthTone(494, 2.0, 0.07, 'sine');   // B4 — the color
-                }, 400);
+                    synthTone(330, 4.0, 0.14, 'sine');    // E4
+                    synthTone(392, 3.8, 0.12, 'sine');    // G4
+                    synthTone(494, 3.5, 0.1, 'sine');     // B4 — the color
+                }, 500);
                 setTimeout(() => {
                     // Upper octave doubles — the grand moment
-                    synthTone(523, 1.8, 0.08, 'sine');   // C5
-                    synthTone(659, 1.6, 0.06, 'sine');   // E5
-                    synthTone(784, 1.4, 0.05, 'sine');   // G5
-                }, 600);
+                    synthTone(523, 3.2, 0.12, 'sine');    // C5
+                    synthTone(659, 3.0, 0.09, 'sine');    // E5
+                    synthTone(784, 2.8, 0.07, 'sine');    // G5
+                }, 750);
                 // 4. Shimmer — crystalline harmonics
                 setTimeout(() => {
-                    synthTone(1047, 1.2, 0.04, 'sine');  // C6
-                    synthTone(1319, 1.0, 0.03, 'sine');  // E6
-                    synthTone(1568, 0.8, 0.025, 'sine'); // G6
-                    synthTone(1976, 0.6, 0.015, 'sine'); // B6 — sparkle
-                }, 800);
-                // 5. Final resonance — a single tone that rings out
-                setTimeout(() => {
-                    synthTone(262, 3.5, 0.06, 'sine');   // C4 rings longest
-                    synthTone(131, 4.0, 0.04, 'sine');   // C3 underneath
+                    synthTone(1047, 2.5, 0.06, 'sine');   // C6
+                    synthTone(1319, 2.2, 0.045, 'sine');  // E6
+                    synthTone(1568, 2.0, 0.035, 'sine');  // G6
+                    synthTone(1976, 1.5, 0.025, 'sine');  // B6 — sparkle
                 }, 1000);
+                // 5. Second bloom — chord shifts to Ebmaj7 (bittersweet)
+                setTimeout(() => {
+                    synthTone(156, 4.0, 0.1, 'sine');     // Eb3
+                    synthTone(311, 3.8, 0.12, 'sine');    // Eb4
+                    synthTone(392, 3.5, 0.09, 'sine');    // G4
+                    synthTone(466, 3.2, 0.07, 'sine');    // Bb4
+                    synthTone(587, 3.0, 0.06, 'sine');    // D5 — maj7
+                }, 2000);
+                // 6. Final resonance — rings out long
+                setTimeout(() => {
+                    synthTone(262, 5.0, 0.08, 'sine');    // C4 rings longest
+                    synthTone(131, 6.0, 0.06, 'sine');    // C3 underneath
+                    synthTone(523, 4.0, 0.04, 'sine');    // C5 shimmer
+                }, 3000);
                 haptic([50, 30, 70, 40, 100]);
             },
             'game-over': () => {
@@ -2397,11 +2406,10 @@
                             fireTrails.push(t);
                         }
                         if (enemy.isBoss) spawnWhitePaintBomb(enemy.x, enemy.y);
-                        // Descending musical note
+                        // Descending musical note — quiet so it doesn't mask the bloom
                         const deathNote = deathScale[idx % deathScale.length];
-                        synthTone(deathNote, 0.2, 0.08 * scale, 'sine');
-                        synthTone(deathNote * 0.5, 0.15, 0.04 * scale, 'sine');
-                        synthNoise(0.05, 0.05 * scale, 1500);
+                        synthTone(deathNote, 0.3, 0.04 * scale, 'sine');
+                        synthTone(deathNote * 0.5, 0.2, 0.02 * scale, 'sine');
                         haptic(12);
                         // Drift pixels — scaled by proximity
                         const driftCount = Math.floor(50 * scale);
