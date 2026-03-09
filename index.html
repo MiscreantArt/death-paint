@@ -609,72 +609,44 @@
         }
 
         function spawnPixelDeath(x, y, favoriteColor) {
-            // Animated burst particles (fly out, fade)
-            for (let i = 0; i < 30; i++) {
+            // Temporary burst particles (animated, fade out)
+            for (let i = 0; i < 50; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const speed = 3 + Math.random() * 8;
+                const speed = 3 + Math.random() * 10;
                 particles.push(new Particle(
                     x + (Math.random() - 0.5) * 6,
                     y + (Math.random() - 0.5) * 6,
                     Math.cos(angle) * speed,
                     Math.sin(angle) * speed,
                     pickSplatColor(favoriteColor),
-                    12 + Math.floor(Math.random() * 15),
-                    0.5 + Math.random() * 1
+                    15 + Math.floor(Math.random() * 20),
+                    0.5 + Math.random() * 1.2
                 ));
             }
-            
-            // PIXEL SPRAY — strict squares, radial density, varied sizes
-            // Style: mostly tiny, occasional big chunks, some black, pixel clusters
-            for (let i = 0; i < 200; i++) {
+            // MASSIVE paint bomb — pixels get SMALLER the further from center
+            // Big fat core pixels
+            for (let i = 0; i < 120; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                // Gaussian-like radial distribution — dense center, scattered outer
-                const radius = Math.abs((Math.random() + Math.random() + Math.random()) / 3) * 90;
-                
-                const px = x + Math.cos(angle) * radius;
-                const py = y + Math.sin(angle) * radius * 0.85; // slight vertical squash
-                
-                // Color — favor the enemy's color, occasional black
-                let color;
-                if (Math.random() < 0.04) {
-                    color = '#000000'; // black pixels
-                } else {
-                    color = pickSplatColor(favoriteColor);
-                }
-                
-                // Size distribution — mostly tiny, rare big chunks
-                const r = Math.random();
-                let size;
-                if (r < 0.60) size = 1;           // tiny mist
-                else if (r < 0.85) size = 1.5;     // normal spray
-                else if (r < 0.95) size = 2.5;     // medium blobs
-                else size = 4;                      // rare big squares
-                
-                const t = new FireTrail(px, py, favoriteColor);
-                t.size = size;
-                t.color = color;
-                // Remove the random offset from FireTrail constructor
-                t.x = px + (Math.random() - 0.5) * 4;
-                t.y = py + (Math.random() - 0.5) * 4;
+                const dist = Math.random() * 25;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, favoriteColor);
+                t.size = 2.5 + Math.random() * 2; // Big
                 fireTrails.push(t);
-                
-                // Pixel clusters — occasional 2x2 or 3x1 block
-                if (Math.random() < 0.04 && size >= 1.5) {
-                    const clusters = [
-                        [[size*2, 0], [0, size*2], [size*2, size*2]], // 2x2
-                        [[size*2, 0], [size*4, 0]],                   // 3x1 horizontal
-                        [[0, size*2], [0, size*4]]                    // 1x3 vertical
-                    ];
-                    const cluster = clusters[Math.floor(Math.random() * clusters.length)];
-                    cluster.forEach(([ox, oy]) => {
-                        const ct = new FireTrail(px + ox, py + oy, favoriteColor);
-                        ct.size = size;
-                        ct.color = color;
-                        ct.x = px + ox;
-                        ct.y = py + oy;
-                        fireTrails.push(ct);
-                    });
-                }
+            }
+            // Medium mid pixels
+            for (let i = 0; i < 80; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 20 + Math.random() * 45;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, favoriteColor);
+                t.size = 1.5 + Math.random() * 1.5; // Medium
+                fireTrails.push(t);
+            }
+            // Tiny outer fling
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 50 + Math.random() * 70;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, favoriteColor);
+                t.size = 0.5 + Math.random() * 1; // Tiny
+                fireTrails.push(t);
             }
         }
 
