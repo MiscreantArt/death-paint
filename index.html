@@ -343,8 +343,10 @@
                 haptic([30, 20, 30]);
             },
             'player-death': () => {
-                // Just a thud — death chimes handle the music
-                synthNoise(0.15, 0.15, 2000);
+                // Death jingle — WAV file, simple and reliable
+                const chime = new Audio('sounds/death-chime.wav');
+                chime.volume = 0.8;
+                chime.play().catch(() => {});
                 haptic([50, 30, 70, 40, 100]);
             },
             'game-over': () => {
@@ -2300,10 +2302,7 @@
                     });
                 }
                 
-                // Play death chime as WAV — synth was failing on mobile
-                const deathChime = new Audio('sounds/death-chime.wav');
-                deathChime.volume = 0.8;
-                deathChime.play().catch(() => {});
+
                 
                 // Schedule all enemies to chain-explode
                 const enemyCopy = [...enemies];
