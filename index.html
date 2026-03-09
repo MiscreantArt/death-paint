@@ -181,15 +181,8 @@
         let maxEnemiesOnScreen = 12; // Starts chill, grows over time
         
         // Grunt trait definitions — each grunt has unique movement personality
-        // Grunt traits — all walk TOWARD you, just with personality
-        const gruntTraits = {
-            3372: 'zigzag',    // hot pink — weaves side to side while approaching
-            5463: 'stalker',   // cyan — creeps slow, bursts when close
-            7473: 'drifter',   // lime — wobbles laterally, lazy approach
-            9638: 'dasher',    // orange — stop-go rhythm
-            668:  'cautious',  // purple — slows down near player
-            3047: 'berserker', // red-orange — faster as health drops
-        };
+        // Grunt traits — disabled (all walk straight at player)
+        const gruntTraits = {};
         
         // Game objects arrays
         let player;
@@ -1344,14 +1337,7 @@
                     this.isBoss = false;
                     this.isDarkBoss = false;
                     this.isGreen = false;
-                    this.trait = gruntTraits[this.spriteId] || null;
-                    // Trait-specific init
-                    this.traitTimer = 0;
-                    this.zigzagPhase = Math.random() * Math.PI * 2;
-                    this.dashCooldown = 60 + Math.floor(Math.random() * 40); // frames until first dash
-                    this.isDashing = false;
-                    this.dashTimer = 0;
-                    this.baseSpeed = this.speed;
+                    this.trait = null;
                 } else if (roll < gruntChance + greenChance) {
                     // Green birds — wanderer movement pattern
                     const greens = [5715, 1320, 2642, 4089];
@@ -1364,10 +1350,6 @@
                     this.isBoss = false;
                     this.isDarkBoss = false;
                     this.isGreen = true;
-                    // Wanderer movement — zigzag unpredictably
-                    this.wanderAngle = Math.random() * Math.PI * 2;
-                    this.wanderTimer = 0;
-                    this.wanderChangeInterval = 40 + Math.floor(Math.random() * 60);
                 } else if (roll < gruntChance + greenChance + whiteBossChance) {
                     // White bosses — erase color on death
                     const whiteBosses = [2941, 8959, 2080, 3904, 8398, 5249];
@@ -1431,88 +1413,13 @@
                 if (dist > 0) {
                     // Apply raincloud slowing effect and progressive difficulty
                     const raincloudslow = playerBuffs.raincloud > 0 ? 0.4 : 1;
-                    let finalSpeed = this.speed * enemySpeedMultiplier * raincloudslow;
-                    let moveX = (dx / dist);
-                    let moveY = (dy / dist);
-                    
-                    // === GRUNT TRAITS — all approach, just with personality ===
-                    if (this.trait === 'zigzag') {
-                        // Weave side to side while walking toward you
-                        this.zigzagPhase += 0.07;
-                        const perpX = -dy / dist;
-                        const perpY = dx / dist;
-                        const wave = Math.sin(this.zigzagPhase) * 0.45;
-                        moveX += perpX * wave;
-                        moveY += perpY * wave;
-                    } else if (this.trait === 'stalker') {
-                        // Slow approach, speeds up when close
-                        if (dist > 140) {
-                            finalSpeed *= 0.6;
-                        } else {
-                            finalSpeed *= 1.5;
-                        }
-                    } else if (this.trait === 'drifter') {
-                        // Lazy wobble — slight lateral drift while approaching
-                        this.zigzagPhase += 0.03;
-                        const perpX = -dy / dist;
-                        const perpY = dx / dist;
-                        const drift = Math.sin(this.zigzagPhase) * 0.3;
-                        moveX += perpX * drift;
-                        moveY += perpY * drift;
-                        finalSpeed *= 0.85; // A bit slower, lazy
-                    } else if (this.trait === 'dasher') {
-                        // Stop-go: walks, pauses, walks
-                        if (this.isDashing) {
-                            finalSpeed *= 1.8;
-                            this.dashTimer--;
-                            if (this.dashTimer <= 0) {
-                                this.isDashing = false;
-                                this.dashCooldown = 40 + Math.floor(Math.random() * 30);
-                            }
-                        } else {
-                            finalSpeed *= 0.25; // Slow crawl between dashes
-                            this.dashCooldown--;
-                            if (this.dashCooldown <= 0) {
-                                this.isDashing = true;
-                                this.dashTimer = 20 + Math.floor(Math.random() * 10);
-                            }
-                        }
-                    } else if (this.trait === 'cautious') {
-                        // Slows down as it gets closer — hesitant
-                        const closeness = Math.max(0, 1 - dist / 300);
-                        finalSpeed *= (1 - closeness * 0.5); // Up to 50% slower near player
-                    } else if (this.trait === 'berserker') {
-                        // Gets faster as health drops
-                        const healthRatio = this.health / 2;
-                        finalSpeed *= (1 + (1 - healthRatio) * 1.2);
-                    }
-                    
-                    // === GREEN BIRD WANDERER ===
-                    if (this.isGreen) {
-                        this.wanderTimer++;
-                        if (this.wanderTimer >= this.wanderChangeInterval) {
-                            this.wanderTimer = 0;
-                            this.wanderChangeInterval = 40 + Math.floor(Math.random() * 60);
-                            // Pick new random wander offset
-                            this.wanderAngle = Math.random() * Math.PI * 2;
-                        }
-                        // Blend: 50% toward player, 50% wander direction
-                        const wx = Math.cos(this.wanderAngle);
-                        const wy = Math.sin(this.wanderAngle);
-                        moveX = moveX * 0.5 + wx * 0.5;
-                        moveY = moveY * 0.5 + wy * 0.5;
-                    }
-                    
-                    // Normalize and apply
-                    const moveMag = Math.sqrt(moveX * moveX + moveY * moveY);
-                    if (moveMag > 0) {
-                        this.x += (moveX / moveMag) * finalSpeed;
-                        this.y += (moveY / moveMag) * finalSpeed;
-                    }
+                    const finalSpeed = this.speed * enemySpeedMultiplier * raincloudslow;
+                    this.x += (dx / dist) * finalSpeed;
+                    this.y += (dy / dist) * finalSpeed;
                     this.angle = Math.atan2(dy, dx);
                     
                     // Update facing direction toward player
-                    this.currentDirection = this.getCardinalDirection(moveX, moveY);
+                    this.currentDirection = this.getCardinalDirection(dx, dy);
                     
                     // Drop permanent color pixels — builds up like Jackson Pollock (not for bosses)
                     // Reduced: 1 pixel every 4 frames to prevent canvas saturation
