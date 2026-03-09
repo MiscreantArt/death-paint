@@ -2042,7 +2042,7 @@
             
             // Chrome drop spawning — every ~15 seconds
             const now = Date.now();
-            if (now - lastChromeDrop > 15000 && !rainbowActive) {
+            if (now - lastChromeDrop > 45000 && !rainbowActive) {
                 lastChromeDrop = now;
                 chromeDrops.push({
                     x: 50 + Math.random() * (canvas.width - 100),
@@ -2124,8 +2124,8 @@
                             playSound('enemy-death');
                             playSound('kill-sound');
                             
-                            // Duck power-up drop: 10% from grunts, 25% from greens/bosses
-                            const dropChance = (enemy.isGreen || enemy.isBoss) ? 0.25 : 0.10;
+                            // Duck power-up drop: rare — 3% from grunts, 10% from greens/bosses
+                            const dropChance = (enemy.isGreen || enemy.isBoss) ? 0.10 : 0.03;
                             if (Math.random() < dropChance) {
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, 'duck'));
                                 playSound('powerup-spawn');
@@ -2174,7 +2174,7 @@
                         playSound('kill-sound');
                         
                         // Duck power-up drop on skully kill
-                        const dropChance2 = (enemy.isGreen || enemy.isBoss) ? 0.25 : 0.10;
+                        const dropChance2 = (enemy.isGreen || enemy.isBoss) ? 0.10 : 0.03;
                         if (Math.random() < dropChance2) {
                             powerUps.push(new PowerUp(enemy.x, enemy.y, 'duck'));
                             playSound('powerup-spawn');
