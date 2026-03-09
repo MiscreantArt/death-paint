@@ -573,6 +573,18 @@
         sprites.powerUps.duck = new Image();
         sprites.powerUps.duck.src = 'assets/powerup-duck.png';
         
+        // Directional duck projectile images
+        const duckProjectileSprites = {
+            up: new Image(),
+            down: new Image(),
+            left: new Image(),
+            right: new Image()
+        };
+        duckProjectileSprites.up.src = 'assets/duck-up.png';
+        duckProjectileSprites.down.src = 'assets/duck-down.png';
+        duckProjectileSprites.left.src = 'assets/duck-left.png';
+        duckProjectileSprites.right.src = 'assets/duck-right.png';
+        
         // Lazy-load power-up bird sprite sheets on first collect
         function loadPowerUpBird(powerUpType) {
             if (sprites.powerUpBirdSheets[powerUpType]) return;
@@ -1622,26 +1634,27 @@
             draw() {
                 ctx.save();
                 
-                // Duck projectile — emoji duck
+                // Duck projectile — directional duck image
                 if (this.isDuck) {
-                    const duckSize = 18;
-                    // Flip duck emoji for west direction
-                    if (this.duckDir === 'west') {
-                        ctx.translate(this.x, this.y);
-                        ctx.scale(-1, 1);
-                        ctx.font = `${duckSize}px serif`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText('🦆', 0, 0);
+                    const duckSize = 28;
+                    // Pick sprite based on shoot direction
+                    let duckDir = 'right'; // default
+                    if (this.duckDir === 'west') duckDir = 'left';
+                    else if (this.duckDir === 'north') duckDir = 'up';
+                    else if (this.duckDir === 'south') duckDir = 'down';
+                    
+                    const duckImg = duckProjectileSprites[duckDir];
+                    if (duckImg && duckImg.complete) {
+                        ctx.shadowBlur = 8;
+                        ctx.shadowColor = '#ffdd00';
+                        ctx.drawImage(duckImg, this.x - duckSize/2, this.y - duckSize/2, duckSize, duckSize);
                     } else {
-                        ctx.font = `${duckSize}px serif`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText('🦆', this.x, this.y);
+                        // Fallback yellow circle
+                        ctx.fillStyle = '#ffdd00';
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, 10, 0, Math.PI * 2);
+                        ctx.fill();
                     }
-                    // Yellow glow
-                    ctx.shadowBlur = 6;
-                    ctx.shadowColor = '#ffdd00';
                     ctx.restore();
                     return;
                 }
