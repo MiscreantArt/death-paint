@@ -1896,8 +1896,10 @@
         let waveSpawned = 0;
         let waveQueue = null;
         const WAVE_SIZE = 10;
-        // Waves get faster: 1200ms → 1000ms → 800ms → 600ms
-        const WAVE_INTERVALS = [1200, 1000, 800, 600];
+        // Spawn intervals per wave (ms between enemies)
+        const WAVE_INTERVALS = [1500, 1300, 1100, 900];
+        let wavePause = 0; // ms timestamp when wave gap started
+        const WAVE_GAP = 2500; // 2.5s breather between waves
         // Wave compositions: [gruntWeight, greenWeight, whiteBossWeight, darkBossWeight]
         // Guaranteed intros + random fill
         // Each wave guarantees a few of the new type, rest is random from the pool
@@ -2063,9 +2065,17 @@
             const currentTime = Date.now();
             
             if (currentWave <= 4) {
-                // Waves 1-4: 10 enemies each, spawning closer together
+                // Gap between waves
+                if (wavePause > 0) {
+                    if (currentTime - wavePause >= WAVE_GAP) {
+                        wavePause = 0;
+                        lastEnemySpawnTime = currentTime;
+                    } else {
+                        // waiting — skip spawn
+                    }
+                }
                 // Build shuffled queue on first spawn of each wave
-                if (!waveQueue || waveQueue.length === 0) {
+                if (wavePause === 0 && (!waveQueue || waveQueue.length === 0)) {
                     const wi = currentWave - 1;
                     const g = WAVE_GUARANTEED[wi];
                     const queue = [];
@@ -2088,7 +2098,7 @@
                 }
                 
                 const interval = WAVE_INTERVALS[currentWave - 1];
-                if (currentTime - lastEnemySpawnTime >= interval) {
+                if (wavePause === 0 && currentTime - lastEnemySpawnTime >= interval) {
                     const pos = getEdgeSpawnPos();
                     const type = waveQueue.shift();
                     enemies.push(new Enemy(pos.x, pos.y, false, type));
@@ -2098,7 +2108,8 @@
                     if (waveSpawned >= WAVE_SIZE) {
                         currentWave++;
                         waveSpawned = 0;
-                        waveQueue = null; // rebuild for next wave
+                        waveQueue = null;
+                        if (currentWave <= 4) wavePause = currentTime; // gap before next wave
                     }
                 }
             } else {
@@ -3716,7 +3727,7 @@
             // Initialize stars
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            currentWave = 1; waveSpawned = 0; waveQueue = null;
+            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0;
         }
 
         function startGame() {
@@ -3783,7 +3794,7 @@
             // Initialize stars and reset continuous spawning
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            currentWave = 1; waveSpawned = 0; waveQueue = null;
+            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0;
         }
         
         function restartGame() {
