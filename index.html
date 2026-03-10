@@ -223,20 +223,18 @@
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
-            // Preload death chime so it plays instantly
-            if (!soundDefs._deathChime) {
-                soundDefs._deathChime = new Audio('sounds/death-chime.wav');
-                soundDefs._deathChime.load();
-            }
-            // Preload duck quack as AudioBuffer for instant overlapping playback
-            if (!soundDefs._quackBuffer && !soundDefs._quackLoading) {
-                soundDefs._quackLoading = true;
-                fetch('sounds/duck-quack.wav?v=3')
+            // Preload WAV files as AudioBuffers — works reliably on all platforms
+            function preloadBuffer(url, key) {
+                if (soundDefs[key] || soundDefs[key + '_loading']) return;
+                soundDefs[key + '_loading'] = true;
+                fetch(url)
                     .then(r => r.arrayBuffer())
                     .then(buf => audioCtx.decodeAudioData(buf))
-                    .then(decoded => { soundDefs._quackBuffer = decoded; console.log('quack buffer loaded'); })
-                    .catch(e => { console.warn('quack buffer failed:', e); soundDefs._quackLoading = false; });
+                    .then(decoded => { soundDefs[key] = decoded; })
+                    .catch(() => { soundDefs[key + '_loading'] = false; });
             }
+            preloadBuffer('sounds/death-chime.wav', '_chimeBuffer');
+            preloadBuffer('sounds/duck-quack.wav?v=3', '_quackBuffer');
 
         }
 
@@ -421,14 +419,18 @@
                 haptic([30, 20, 30]);
             },
             'player-death': () => {
-                // Death jingle — preloaded WAV, plays immediately
-                if (!soundDefs._deathChime) {
-                    soundDefs._deathChime = new Audio('sounds/death-chime.wav');
+                // Death jingle — preloaded AudioBuffer, plays immediately
+                if (soundDefs._chimeBuffer && audioCtx) {
+                    try {
+                        const source = audioCtx.createBufferSource();
+                        source.buffer = soundDefs._chimeBuffer;
+                        const gain = audioCtx.createGain();
+                        gain.gain.value = 0.85;
+                        source.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        source.start(0);
+                    } catch(e) {}
                 }
-                const chime = soundDefs._deathChime;
-                chime.currentTime = 0;
-                chime.volume = 0.85;
-                chime.play().catch(() => {});
                 haptic([50, 30, 70, 40, 100]);
             },
             'game-over': () => {
@@ -482,13 +484,6 @@
                         source.connect(gain);
                         gain.connect(audioCtx.destination);
                         source.start(0);
-                    } catch(e) { console.warn('quack err:', e); }
-                } else {
-                    // Fallback: try Audio element directly
-                    try {
-                        const q = new Audio('sounds/duck-quack.wav?v=3');
-                        q.volume = 0.5;
-                        q.play().catch(() => {});
                     } catch(e) {}
                 }
                 haptic(15);
