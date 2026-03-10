@@ -94,6 +94,7 @@
         let tutorialMoveDist = 0;
         let tutorialEnemy = null;
         let tutorialStepStartTime = 0;
+        let tutorialKills = 0;
         
         // Kill streak → paint rain system
         function onEnemyKill(tier) {
@@ -1945,25 +1946,26 @@
                         tutorialMoveDist += moveDistance * frameDt * 60;
                         
                         // Need more walking before advancing
-                        if (tutorialMoveDist >= 300) {
+                        if (tutorialMoveDist >= 150) {
                             tutorialStep = 2;
                             tutorialStepStartTime = Date.now();
-                            // Spawn enemy walking in from the far right edge
-                            tutorialEnemy = new Enemy(canvas.width + 30, canvas.height * 0.35, true);
-                            tutorialEnemy.speed = 0.6;
-                            enemies.push(tutorialEnemy);
+                            tutorialKills = 0;
+                            // Spawn first enemy from top, slow
+                            spawnTutorialEnemy();
                         }
                     }
                 } else if (tutorialStep === 2) {
-                    // Step 2: Learn shooting — enemy walks in from far side, kill it
-                    if (enemies.length === 0) {
+                    // Step 2: Learn shooting — kill 2 enemies
+                    if (enemies.length === 0 && tutorialKills >= 2) {
                         tutorialStep = 3;
                         tutorialStepStartTime = Date.now();
+                    } else if (enemies.length === 0 && tutorialKills < 2) {
+                        // Spawn next enemy
+                        spawnTutorialEnemy();
                     }
                 } else if (tutorialStep === 3) {
                     // Step 3: "paint the canvas" — elegant transition
                     if (Date.now() - tutorialStepStartTime >= 2500) {
-                        localStorage.setItem('deathpaint-tutorial-done', '1');
                         startGame();
                         return;
                     }
@@ -1994,6 +1996,7 @@
                                 playSound('enemy-death');
                                 playSound('kill-sound');
                                 screenShake = 2;
+                                tutorialKills++;
                                 enemies.splice(eIndex, 1);
                             }
                             projectiles.splice(pIndex, 1);
@@ -2686,6 +2689,7 @@
             ctx.globalAlpha = 1;
         }
         
+        let skipButtonRect = null;
         function drawTutorial() {
             // Clean white background like normal game
             ctx.fillStyle = '#ffffff';
@@ -2796,6 +2800,27 @@
                 ctx.fillStyle = '#2a2a2a';
                 ctx.fillText('paint the canvas', canvas.width / 2, cy);
                 ctx.globalAlpha = 1;
+            }
+            
+            // SKIP button — top right, always visible (except step 3)
+            if (tutorialStep < 3) {
+                ctx.globalAlpha = 0.7;
+                const skipW = 70, skipH = 30;
+                const skipX = canvas.width - skipW - 12;
+                const skipY = 12;
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.fillRect(skipX, skipY, skipW, skipH);
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(skipX, skipY, skipW, skipH);
+                ctx.textAlign = 'center';
+                ctx.font = `bold 14px 'Courier New', monospace`;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('SKIP', skipX + skipW / 2, skipY + 20);
+                ctx.globalAlpha = 1;
+                skipButtonRect = { x: skipX, y: skipY, w: skipW, h: skipH };
+            } else {
+                skipButtonRect = null;
             }
             
             ctx.restore();
@@ -3252,6 +3277,12 @@
                 
                 const inBtn = (btn) => btn && tx >= btn.x && tx <= btn.x + btn.w && ty >= btn.y && ty <= btn.y + btn.h;
                 
+                // Skip tutorial button
+                if (gameState === 'tutorial' && skipButtonRect && inBtn(skipButtonRect)) {
+                    playSound('menu-tap');
+                    startGame();
+                    return;
+                }
                 if (inBtn(hangBtnGameRect)) {
                     hangArtMidGame();
                     return;
@@ -3401,12 +3432,8 @@
                 initAudio(); // Init AudioContext on first user gesture (mobile requirement)
                 if (gameState === 'menu') {
                     playSound('menu-tap');
-                    // Check if tutorial has been completed
-                    if (!localStorage.getItem('deathpaint-tutorial-done')) {
-                        startTutorial();
-                    } else {
-                        startGame();
-                    }
+                    // Tutorial every time with skip option
+                    startTutorial();
                 } else if (gameState === 'gallery') {
                     const cx = mouse.x, cy = mouse.y;
                     // Save button in gallery
@@ -3451,6 +3478,14 @@
             }
         }
         
+        function spawnTutorialEnemy() {
+            // Spawn from top, slow, gives player time to aim
+            const x = canvas.width * 0.3 + Math.random() * canvas.width * 0.4;
+            const enemy = new Enemy(x, -30, true);
+            enemy.speed = 0.4;
+            enemies.push(enemy);
+        }
+        
         function startTutorial() {
             // Initialize tutorial state
             currentArtTitle = '';
@@ -3476,6 +3511,7 @@
             tutorialStep = 1;
             tutorialMoveDist = 0;
             tutorialEnemy = null;
+            tutorialKills = 0;
             tutorialStepStartTime = Date.now();
             
             // Reset game variables (lighter setup than full game)
