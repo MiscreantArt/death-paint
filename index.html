@@ -466,13 +466,13 @@
             },
 
             'duck-quack': () => {
-                // Preloaded in initAudio — reuse like death chime (iOS requires preload during gesture)
                 if (!soundDefs._quackAudio) {
                     soundDefs._quackAudio = new Audio('sounds/duck-quack.wav?v=2');
                     soundDefs._quackAudio.volume = 0.5;
                 }
-                const q = soundDefs._quackAudio;
-                q.currentTime = 0;
+                // Clone so overlapping quacks work
+                const q = soundDefs._quackAudio.cloneNode();
+                q.volume = 0.5;
                 q.play().catch(() => {});
                 haptic(15);
             },
@@ -2198,18 +2198,18 @@
                     }
                 }
             } else {
-                // Free-for-all: gentler ramp
-                const nextSpawnDelay = Math.max(600, 1500 - gameTime * 2);
+                // Free-for-all: steady ramp
+                const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
                 
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
                     spawnSingleEnemy();
                 }
                 
-                // Gradual difficulty — every 35s instead of 25s
-                if (Math.floor(gameTime / 35) > Math.floor((gameTime - 0.016) / 35)) {
-                    enemySpeedMultiplier += 0.04;
+                // Gradual difficulty — every 25s
+                if (Math.floor(gameTime / 25) > Math.floor((gameTime - 0.016) / 25)) {
+                    enemySpeedMultiplier += 0.05;
                     playerSpeedBonus += 0.02;
-                    maxEnemiesOnScreen = Math.min(20, maxEnemiesOnScreen + 1);
+                    maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
                 }
             }
             } catch(spawnErr) {
