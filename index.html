@@ -584,28 +584,77 @@
         };
         
         // Sprite loading - updated for sprite sheets
+        function loadImage(src) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => { console.warn('Failed to load:', src); resolve(img); };
+                img.src = src;
+                return img;
+            });
+        }
+        
         async function loadSprites() {
-            // Load hero sprite sheet (bird ID 616)
+            const allLoads = [];
+            
+            // Hero sheet
             sprites.heroSheet = new Image();
             sprites.heroSheet.src = 'sheets/2755.png';
+            allLoads.push(new Promise(r => { sprites.heroSheet.onload = r; sprites.heroSheet.onerror = r; }));
             
-            // Wait for hero sheet to load
-            await new Promise((resolve) => {
-                sprites.heroSheet.onload = resolve;
-                sprites.heroSheet.onerror = () => { 
-                    console.warn('Failed to load hero sprite sheet'); 
-                    resolve(); 
-                };
+            // ALL enemy sheets — wait for them
+            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089];
+            enemyIds.forEach(id => {
+                const img = new Image();
+                img.src = `sheets/${id}.png`;
+                allLoads.push(new Promise(r => { img.onload = r; img.onerror = r; }));
+                sprites.enemySheets = sprites.enemySheets || {};
+                sprites.enemySheets[id] = img;
             });
             
-            // Pre-load ALL enemy sheets so they have sprites ready
-            [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089].forEach(id => loadEnemySprites(id));
-            
-            // Preload Moonbird #12 sheet (squiggle bird) + chromie icon for power-up
+            // Squiggle bird + chromie icon
             sprites.squiggleSheet = new Image();
             sprites.squiggleSheet.src = 'sheets/12.png';
+            allLoads.push(new Promise(r => { sprites.squiggleSheet.onload = r; sprites.squiggleSheet.onerror = r; }));
+            
             sprites.chromieIcon = new Image();
             sprites.chromieIcon.src = 'assets/powerup-chromie.png';
+            allLoads.push(new Promise(r => { sprites.chromieIcon.onload = r; sprites.chromieIcon.onerror = r; }));
+            
+            // Power-up icons
+            [sprites.powerUps.duck, sprites.powerUps.chromie, sprites.powerUps.skully].forEach(img => {
+                if (img && img.src) allLoads.push(new Promise(r => { img.onload = r; img.onerror = r; }));
+            });
+            
+            // Duck projectile sprites
+            Object.values(duckProjectileSprites).forEach(img => {
+                if (img && img.src) allLoads.push(new Promise(r => { img.onload = r; img.onerror = r; }));
+            });
+            
+            // Wait for ALL with progress
+            let loaded = 0;
+            const total = allLoads.length;
+            allLoads.forEach(p => p.then(() => {
+                loaded++;
+                // Update loading bar
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#333333';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Loading... ${Math.round(loaded/total*100)}%`, canvas.width/2, canvas.height/2 - 20);
+                // Progress bar
+                const barW = canvas.width * 0.6;
+                const barH = 8;
+                const barX = (canvas.width - barW) / 2;
+                const barY = canvas.height / 2 + 10;
+                ctx.fillStyle = '#ddd';
+                ctx.fillRect(barX, barY, barW, barH);
+                ctx.fillStyle = '#333';
+                ctx.fillRect(barX, barY, barW * (loaded/total), barH);
+            }));
+            
+            await Promise.all(allLoads);
         }
         
         // Power-up bird map for hero sprite swapping
@@ -3540,9 +3589,9 @@
         function handleClick() {
             try {
                 initAudio(); // Init AudioContext on first user gesture (mobile requirement)
+                unlockMusic(); // Unlock music Audio on every gesture (iOS needs it)
                 if (gameState === 'menu') {
                     playSound('menu-tap');
-                    unlockMusic(); // Unlock Audio on iOS during user gesture
                     // Tutorial every time with skip option
                     startTutorial();
                 } else if (gameState === 'gallery') {
@@ -3883,7 +3932,7 @@
             try { 
                 await Promise.race([
                     loadSprites(),
-                    new Promise(resolve => setTimeout(resolve, 5000)) // 5s timeout
+                    new Promise(resolve => setTimeout(resolve, 15000)) // 15s timeout
                 ]);
             } catch(e) { console.warn('Sprite load error (non-fatal):', e); }
             
