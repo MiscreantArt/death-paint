@@ -3612,6 +3612,8 @@
                         if (cx >= hangButtonRect.x && cx <= hangButtonRect.x + hangButtonRect.w &&
                             cy >= hangButtonRect.y && cy <= hangButtonRect.y + hangButtonRect.h) {
                             gameState = galleryReturnState || 'playing';
+                            // Clear captured art if returning to gameplay so death recaptures fresh
+                            if (gameState === 'playing') capturedArt = null;
                             playSound('menu-tap');
                             return;
                         }
