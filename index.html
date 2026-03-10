@@ -76,7 +76,7 @@
         }
 
         // Game state
-        let gameState = 'menu'; // menu, playing, dying, gameOver, gallery
+        let gameState = 'menu'; // menu, playing, dying, gameOver, gallery, tutorial
         let dyingStartTime = 0;
         let dyingEnemiesExploded = false;
         let dyingDriftPixels = []; // pixels that drift outward after death
@@ -88,6 +88,12 @@
         let paintRainDrops = [];
         let paintRainTimer = 0;
         let gamePaused = false;
+        
+        // Tutorial state
+        let tutorialStep = 0;
+        let tutorialMoveDist = 0;
+        let tutorialEnemy = null;
+        let tutorialStepStartTime = 0;
         
         // Kill streak → paint rain system
         function onEnemyKill(tier) {
@@ -172,9 +178,6 @@
         
         // UI labels fade timer
         let zoneLabelsVisible = 0;
-        let tutorialOverlay = 0; // frames remaining for intro control overlay
-        let tutorialDismissed = false;
-        let hasPlayedOnce = false; // skip tutorial on replays
         
         // Auto-fire system
         let lastAutoFireTime = 0;
@@ -1894,8 +1897,8 @@
             if (gameState === 'gameOver' && !capturedArt) {
                 captureArt();
             }
-            if (gameState !== 'playing' && gameState !== 'dying') return;
-            if (gamePaused && gameState === 'playing') return;
+            if (gameState !== 'playing' && gameState !== 'dying' && gameState !== 'tutorial') return;
+            if (gamePaused && (gameState === 'playing' || gameState === 'tutorial')) return;
             // Hit-pause: skip update frames for kill impact feel
             if (hitPause > 0) { hitPause -= 1; return; }
             if (gameState === 'dying') {
@@ -1926,6 +1929,91 @@
                     }
                     return p.life > 0;
                 });
+                return;
+            }
+            
+            // Tutorial state handling
+            if (gameState === 'tutorial') {
+                // Update player (movement always allowed)
+                player.update();
+                
+                // Tutorial logic based on current step
+                if (tutorialStep === 1) {
+                    // Step 1: Learn movement - track distance moved
+                    const prevX = player.x;
+                    const prevY = player.y;
+                    
+                    // Track cumulative movement distance
+                    if (leftZone.active && (leftZone.currentDirection.x !== 0 || leftZone.currentDirection.y !== 0)) {
+                        const moveDistance = Math.sqrt(leftZone.currentDirection.x * leftZone.currentDirection.x + leftZone.currentDirection.y * leftZone.currentDirection.y);
+                        tutorialMoveDist += moveDistance * frameDt * 60;
+                        
+                        // Advance to step 2 when player has moved enough
+                        if (tutorialMoveDist >= 100) {
+                            tutorialStep = 2;
+                            tutorialStepStartTime = Date.now();
+                            // Spawn one slow tutorial enemy at top center
+                            const tutorialEnemyPos = { x: canvas.width / 2, y: canvas.height * 0.2 };
+                            tutorialEnemy = new Enemy(tutorialEnemyPos.x, tutorialEnemyPos.y, true); // force grunt
+                            tutorialEnemy.speed = 0.5; // slower speed
+                            enemies.push(tutorialEnemy);
+                        }
+                    }
+                } else if (tutorialStep === 2) {
+                    // Step 2: Learn shooting - wait for tutorial enemy to be killed
+                    if (enemies.length === 0) {
+                        // Tutorial enemy killed, advance to step 3
+                        tutorialStep = 3;
+                        tutorialStepStartTime = Date.now();
+                    }
+                } else if (tutorialStep === 3) {
+                    // Step 3: "NOW PAINT" transition - wait 1.5 seconds
+                    if (Date.now() - tutorialStepStartTime >= 1500) {
+                        // Tutorial complete - save to localStorage and start real game
+                        localStorage.setItem('deathpaint-tutorial-done', '1');
+                        startGame();
+                        return;
+                    }
+                }
+                
+                // Update tutorial enemies
+                enemies.forEach(enemy => enemy.update());
+                
+                // Update projectiles
+                projectiles = projectiles.filter(proj => !proj.update());
+                
+                // Update particles
+                particles = particles.filter(particle => {
+                    particle.update();
+                    return particle.life > 0;
+                });
+                
+                // Collision detection - player projectiles vs tutorial enemies (same as normal game)
+                projectiles.forEach((proj, pIndex) => {
+                    enemies.forEach((enemy, eIndex) => {
+                        const dx = proj.x - enemy.x;
+                        const dy = proj.y - enemy.y;
+                        if (dx * dx + dy * dy < (enemy.size * enemy.size)) {
+                            const projAngle = Math.atan2(proj.vy, proj.vx);
+                            if (enemy.takeDamage(proj.damage, projAngle)) {
+                                // Enemy killed - spawn normal death splat
+                                spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                                playSound('enemy-death');
+                                playSound('kill-sound');
+                                screenShake = 2;
+                                enemies.splice(eIndex, 1);
+                            }
+                            projectiles.splice(pIndex, 1);
+                        }
+                    });
+                });
+                
+                // Update screen shake
+                if (screenShake > 0) {
+                    screenShake -= frameDt * 60;
+                    if (screenShake < 0) screenShake = 0;
+                }
+                
                 return;
             }
             
@@ -2376,6 +2464,8 @@
             
             if (gameState === 'menu') {
                 drawMenu();
+            } else if (gameState === 'tutorial') {
+                drawTutorial();
             } else if (gameState === 'playing') {
                 // Clean white background — no stars
                 
@@ -2461,59 +2551,7 @@
                 // Draw split-screen zone indicators
                 drawZoneIndicators();
                 
-                // Tutorial overlay — shows controls at game start
-                if (tutorialOverlay > 0 && !tutorialDismissed) {
-                    const fadeFrames = 40;
-                    const alpha = tutorialOverlay < fadeFrames ? tutorialOverlay / fadeFrames : 1;
-                    const halfW = canvas.width / 2;
-                    const cy = canvas.height / 2;
-                    
-                    ctx.save();
-                    // Left panel
-                    ctx.fillStyle = `rgba(0,0,0,${0.35 * alpha})`;
-                    ctx.fillRect(0, 0, halfW, canvas.height);
-                    // Right panel
-                    ctx.fillRect(halfW, 0, halfW, canvas.height);
-                    
-                    // Subtle divider
-                    ctx.strokeStyle = `rgba(255,255,255,${0.15 * alpha})`;
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(halfW, 0);
-                    ctx.lineTo(halfW, canvas.height);
-                    ctx.stroke();
-                    
-                    const fontSize = Math.max(26, Math.floor(canvas.width / 12));
-                    const subSize = Math.max(16, Math.floor(fontSize * 0.55));
-                    ctx.textAlign = 'center';
-                    
-                    // Left text
-                    ctx.globalAlpha = alpha;
-                    ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
-                    ctx.fillStyle = '#ffffff';
-                    ctx.shadowColor = 'rgba(255,255,255,0.5)';
-                    ctx.shadowBlur = 8;
-                    ctx.fillText('MOVE', halfW / 2, cy - 10);
-                    ctx.shadowBlur = 0;
-                    ctx.font = `${subSize}px 'Courier New', monospace`;
-                    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                    ctx.fillText('hold + drag', halfW / 2, cy + subSize + 8);
-                    
-                    // Right text
-                    ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
-                    ctx.fillStyle = '#ffffff';
-                    ctx.shadowColor = 'rgba(255,255,255,0.5)';
-                    ctx.shadowBlur = 8;
-                    ctx.fillText('SHOOT', halfW + halfW / 2, cy - 10);
-                    ctx.shadowBlur = 0;
-                    ctx.font = `${subSize}px 'Courier New', monospace`;
-                    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                    ctx.fillText('hold + aim', halfW + halfW / 2, cy + subSize + 8);
-                    
-                    ctx.globalAlpha = 1;
-                    ctx.restore();
-                    tutorialOverlay -= frameDt * 60;
-                }
+
             } else if (gameState === 'dying') {
                 // Keep showing the canvas with paint during death sequence
                 ctx.save();
@@ -2653,6 +2691,115 @@
             ctx.fillStyle = '#222222';
             ctx.fillText('TAP TO PLAY', canvas.width / 2, canvas.height * 0.78);
             ctx.globalAlpha = 1;
+        }
+        
+        function drawTutorial() {
+            // Clean white background like normal game
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw arena border (subtle)
+            ctx.save();
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+            ctx.restore();
+            
+            // Draw game objects (paint, particles, enemies, player)
+            if (paintCanvas) ctx.drawImage(paintCanvas, 0, 0);
+            fireTrails.forEach(trail => trail.draw());
+            if (paintCtx && fireTrails.length > 0) {
+                fireTrails.forEach(trail => {
+                    paintCtx.fillStyle = trail.color;
+                    paintCtx.fillRect(trail.x - trail.size, trail.y - trail.size, trail.size * 2, trail.size * 2);
+                });
+                fireTrails = [];
+            }
+            
+            particles.forEach(particle => particle.draw());
+            projectiles.forEach(proj => proj.draw());
+            enemies.forEach(enemy => enemy.draw());
+            player.draw();
+            
+            // Tutorial overlay based on current step
+            const halfW = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            ctx.save();
+            
+            if (tutorialStep === 1) {
+                // Step 1: "MOVE" - left half highlighted, right dimmed
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                ctx.fillRect(0, 0, halfW, canvas.height); // left less dim
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(halfW, 0, halfW, canvas.height); // right fully dimmed
+                
+                // Divider line
+                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(halfW, 0);
+                ctx.lineTo(halfW, canvas.height);
+                ctx.stroke();
+                
+                // Left text
+                const fontSize = Math.max(28, Math.floor(canvas.width / 10));
+                const subSize = Math.max(16, Math.floor(fontSize * 0.55));
+                ctx.textAlign = 'center';
+                
+                ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = 'rgba(255,255,255,0.5)';
+                ctx.shadowBlur = 8;
+                ctx.fillText('HOLD + DRAG', halfW / 2, cy - 10);
+                ctx.shadowBlur = 0;
+                ctx.font = `${subSize}px 'Courier New', monospace`;
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.fillText('to move', halfW / 2, cy + subSize + 8);
+                
+            } else if (tutorialStep === 2) {
+                // Step 2: "SHOOT" - right half highlighted, left dimmed  
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(0, 0, halfW, canvas.height); // left dimmed
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                ctx.fillRect(halfW, 0, halfW, canvas.height); // right less dim
+                
+                // Divider line
+                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(halfW, 0);
+                ctx.lineTo(halfW, canvas.height);
+                ctx.stroke();
+                
+                // Right text
+                const fontSize = Math.max(28, Math.floor(canvas.width / 10));
+                const subSize = Math.max(16, Math.floor(fontSize * 0.55));
+                ctx.textAlign = 'center';
+                
+                ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = 'rgba(255,255,255,0.5)';
+                ctx.shadowBlur = 8;
+                ctx.fillText('HOLD RIGHT SIDE', halfW + halfW / 2, cy - 10);
+                ctx.shadowBlur = 0;
+                ctx.font = `${subSize}px 'Courier New', monospace`;
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 8);
+                
+            } else if (tutorialStep === 3) {
+                // Step 3: "NOW PAINT" - big centered text
+                ctx.textAlign = 'center';
+                const fontSize = Math.max(36, Math.floor(canvas.width / 8));
+                ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = 'rgba(255,255,255,0.8)';
+                ctx.shadowBlur = 12;
+                ctx.fillText('NOW PAINT', canvas.width / 2, cy);
+                ctx.shadowBlur = 0;
+            }
+            
+            ctx.restore();
         }
         
         // Draw game over screen
@@ -3129,11 +3276,6 @@
             if (zoneLabelsVisible === 0) {
                 zoneLabelsVisible = 180; // 3 seconds at 60fps
             }
-            // Dismiss tutorial overlay on first touch (but not in first 1.5s — let them read it)
-            if (!tutorialDismissed && tutorialOverlay > 0 && (Date.now() - gameStartTime) > 1500) {
-                if (tutorialOverlay > 40) tutorialOverlay = 40; // start fade-out
-                tutorialDismissed = true;
-            }
             
             const rect = canvas.getBoundingClientRect();
             const centerX = canvas.width / 2;
@@ -3157,8 +3299,8 @@
                         leftZone.currentDirection = { x: 0, y: 0, angle: 0 };
                     }
                 } else {
-                    // Right zone (shooting)
-                    if (!rightZone.active) {
+                    // Right zone (shooting) - block during tutorial step 1
+                    if (!rightZone.active && !(gameState === 'tutorial' && tutorialStep === 1)) {
                         rightZone.active = true;
                         rightZone.touchId = touch.identifier;
                         rightZone.startX = touchX;
@@ -3260,7 +3402,12 @@
                 initAudio(); // Init AudioContext on first user gesture (mobile requirement)
                 if (gameState === 'menu') {
                     playSound('menu-tap');
-                    startGame();
+                    // Check if tutorial has been completed
+                    if (!localStorage.getItem('deathpaint-tutorial-done')) {
+                        startTutorial();
+                    } else {
+                        startGame();
+                    }
                 } else if (gameState === 'gallery') {
                     const cx = mouse.x, cy = mouse.y;
                     // Save button in gallery
@@ -3305,6 +3452,78 @@
             }
         }
         
+        function startTutorial() {
+            // Initialize tutorial state
+            currentArtTitle = '';
+            capturedArt = null;
+            canvasCoverage = 0;
+            gamePaused = false;
+            streakCount = 0;
+            streakPure = true;
+            paintRainActive = false;
+            paintRainDrops = [];
+            paintRainTimer = 0;
+            soundDefs._killNote = 0;
+            saveButtonRect = null;
+            dyingDriftPixels = [];
+            dyingEnemiesExploded = false;
+            rainbowActive = false;
+            rainbowTimer = 0;
+            score = 0;
+            killCount = 0;
+            
+            // Tutorial-specific setup
+            gameState = 'tutorial';
+            tutorialStep = 1;
+            tutorialMoveDist = 0;
+            tutorialEnemy = null;
+            tutorialStepStartTime = Date.now();
+            
+            // Reset game variables (lighter setup than full game)
+            gameStartTime = Date.now();
+            gameTime = 0;
+            enemySpeedMultiplier = 1;
+            playerSpeedBonus = 0;
+            maxEnemiesOnScreen = 1; // Only tutorial enemy
+            
+            // Reset player to center
+            player = new Player(canvas.width / 2, canvas.height / 2);
+            
+            // Clear arrays
+            enemies = [];
+            projectiles = [];
+            powerUps = [];
+            particles = [];
+            fireTrails = [];
+            
+            // Init paint bitmap
+            paintCanvas = document.createElement('canvas');
+            paintCanvas.width = canvas.width;
+            paintCanvas.height = canvas.height;
+            paintCtx = paintCanvas.getContext('2d');
+            
+            // Reset buffs
+            playerBuffs = {
+                duck: 0,
+                skully: 0
+            };
+            
+            // Reset touch controls
+            leftZone.active = false;
+            leftZone.touchId = null;
+            leftZone.currentDirection = { x: 0, y: 0, angle: 0 };
+            rightZone.active = false;
+            rightZone.touchId = null;
+            rightZone.currentDirection = { x: 0, y: 0, angle: 0 };
+            zoneLabelsVisible = 0;
+            lastAutoFireTime = 0;
+            
+            // Initialize stars
+            if (stars.length === 0) initStars();
+            lastEnemySpawnTime = Date.now();
+            introGruntsSpawned = 0;
+        }
+
         function startGame() {
             currentArtTitle = '';
             capturedArt = null;
@@ -3364,11 +3583,6 @@
             rightZone.touchId = null;
             rightZone.currentDirection = { x: 0, y: 0, angle: 0 };
             zoneLabelsVisible = 0;
-            if (!hasPlayedOnce) {
-                tutorialOverlay = 240; // 4 seconds at 60fps — give time to read
-                tutorialDismissed = false;
-            }
-            hasPlayedOnce = true;
             lastAutoFireTime = 0;
             
             // Initialize stars and reset continuous spawning
