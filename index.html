@@ -213,7 +213,8 @@
         
         // ===== SOUND SYSTEM (Synthesized — musical & pleasing) =====
         let audioCtx = null;
-        let bgMusic = null;
+        let bgMusic = null; // { buffer, source, gain, startTime, offset }
+        let bgMusicBuffer = null;
 
         function initAudio() {
             if (!audioCtx) {
@@ -239,26 +240,54 @@
         }
 
         function prepareMusic() {
-            // Must be called during a user gesture (touch/click) to unlock on iOS
-            if (!bgMusic) {
-                bgMusic = new Audio('sounds/starshore-save-point.mp3');
-                bgMusic.loop = true;
-                bgMusic.volume = 0;
-                bgMusic.muted = true;
-                // Play + immediate pause to unlock the element — fully muted
-                const p = bgMusic.play();
-                if (p) p.then(() => { bgMusic.pause(); bgMusic.currentTime = 0; bgMusic.muted = false; }).catch(() => { if(bgMusic) bgMusic.muted = false; });
+            // Preload music as AudioBuffer — no HTML Audio element needed
+            if (!bgMusicBuffer && !bgMusic?._loading && audioCtx) {
+                const m = { _loading: true };
+                bgMusic = m;
+                fetch('sounds/starshore-save-point.mp3')
+                    .then(r => r.arrayBuffer())
+                    .then(buf => audioCtx.decodeAudioData(buf))
+                    .then(decoded => { bgMusicBuffer = decoded; bgMusic = null; })
+                    .catch(() => { bgMusic = null; });
             }
         }
         function startMusic() {
-            if (bgMusic) {
-                bgMusic.currentTime = 0;
-                bgMusic.volume = 0.15;
-                bgMusic.play().catch(() => {});
-            }
+            stopMusic();
+            if (!bgMusicBuffer || !audioCtx) return;
+            const source = audioCtx.createBufferSource();
+            source.buffer = bgMusicBuffer;
+            source.loop = true;
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.15;
+            source.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(0);
+            bgMusic = { source, gain, startTime: audioCtx.currentTime, offset: 0 };
         }
         function stopMusic() {
-            if (bgMusic) { bgMusic.pause(); bgMusic.currentTime = 0; }
+            if (bgMusic && bgMusic.source) {
+                try { bgMusic.source.stop(); } catch(e) {}
+                bgMusic = null;
+            }
+        }
+        function pauseMusic() {
+            if (bgMusic && bgMusic.source && audioCtx) {
+                bgMusic.offset = (audioCtx.currentTime - bgMusic.startTime) % (bgMusicBuffer?.duration || 1);
+                try { bgMusic.source.stop(); } catch(e) {}
+                bgMusic.source = null;
+            }
+        }
+        function resumeMusic() {
+            if (!bgMusicBuffer || !audioCtx || !bgMusic) return;
+            const source = audioCtx.createBufferSource();
+            source.buffer = bgMusicBuffer;
+            source.loop = true;
+            const gain = bgMusic.gain || audioCtx.createGain();
+            if (!bgMusic.gain) { gain.gain.value = 0.15; gain.connect(audioCtx.destination); }
+            source.connect(gain);
+            source.start(0, bgMusic.offset || 0);
+            bgMusic.source = source;
+            bgMusic.startTime = audioCtx.currentTime - (bgMusic.offset || 0);
         }
 
         // === Haptics ===
@@ -3978,11 +4007,11 @@
         // Pause/resume when leaving/returning to app
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                if (bgMusic) bgMusic.pause();
+                pauseMusic();
                 if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
             } else {
-                if (bgMusic && gameState === 'playing') bgMusic.play().catch(() => {});
                 if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if (bgMusic && gameState === 'playing') resumeMusic();
             }
         });
         
