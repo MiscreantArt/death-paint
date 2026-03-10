@@ -2084,6 +2084,7 @@
             
             // === SPAWNING ===
             const currentTime = Date.now();
+            try {
             
             if (firstFiveSpawned < 5) {
                 // First 5 grunts: one at a time, wait until killed before next
@@ -2144,6 +2145,13 @@
                     playerSpeedBonus += 0.02;
                     maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
                 }
+            }
+            } catch(spawnErr) {
+                // Surface spawn errors visibly
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,50);
+                ctx.fillStyle = 'red'; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'left';
+                ctx.fillText('SPAWN ERR: ' + spawnErr.message + ' wave:' + currentWave + ' burst:' + waveBurstIndex, 5, 20);
+                gameState = 'crashed'; return;
             }
             
             // Update player
