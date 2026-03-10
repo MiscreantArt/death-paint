@@ -221,6 +221,14 @@
                 soundDefs._deathChime = new Audio('sounds/death-chime.wav');
                 soundDefs._deathChime.load();
             }
+            // Preload duck quack as Web Audio buffer (HTMLAudioElement is flaky on iOS)
+            if (!soundDefs._quackBuffer) {
+                fetch('sounds/duck-quack.wav')
+                    .then(r => r.arrayBuffer())
+                    .then(buf => audioCtx.decodeAudioData(buf))
+                    .then(decoded => { soundDefs._quackBuffer = decoded; })
+                    .catch(() => {});
+            }
         }
 
         function startMusic() {
@@ -403,15 +411,21 @@
             },
 
             'duck-quack': () => {
-                // Fresh audio each quack — iOS won't replay reused Audio elements reliably
-                if (soundDefs._quackAudio) {
-                    soundDefs._quackAudio.pause();
-                    soundDefs._quackAudio = null;
+                // Play via Web Audio API — iOS blocks HTMLAudioElement but allows this
+                if (soundDefs._quackBuffer && audioCtx) {
+                    // Stop previous quack if still playing
+                    if (soundDefs._quackSource) {
+                        try { soundDefs._quackSource.stop(); } catch(e) {}
+                    }
+                    const src = audioCtx.createBufferSource();
+                    src.buffer = soundDefs._quackBuffer;
+                    const g = audioCtx.createGain();
+                    g.gain.value = 0.5;
+                    src.connect(g);
+                    g.connect(audioCtx.destination);
+                    src.start();
+                    soundDefs._quackSource = src;
                 }
-                const q = new Audio('sounds/duck-quack.wav');
-                q.volume = 0.5;
-                q.play().catch(() => {});
-                soundDefs._quackAudio = q;
                 haptic(15);
             },
 
@@ -1881,7 +1895,7 @@
                 if (playerBuffs.duck <= 0) {
                     playerBuffs.duck = 0;
                     // Kill any lingering quack
-                    if (soundDefs._quackAudio) { soundDefs._quackAudio.pause(); soundDefs._quackAudio.currentTime = 0; }
+                    if (soundDefs._quackSource) { try { soundDefs._quackSource.stop(); } catch(e) {} soundDefs._quackSource = null; }
                     playSound('powerup-expire');
                 }
             }
