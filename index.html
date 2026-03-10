@@ -76,7 +76,7 @@
         }
 
         // Game state
-        let gameState = 'menu'; // menu, playing, dying, gameOver, gallery, tutorial
+        let gameState = 'menu'; // menu, playing, dying, gameOver, gallery, tutorial, preroll
         let dyingStartTime = 0;
         let dyingEnemiesExploded = false;
         let dyingDriftPixels = []; // pixels that drift outward after death
@@ -1913,6 +1913,7 @@
             if (gameState === 'gameOver' && !capturedArt) {
                 captureArt();
             }
+            if (gameState === 'preroll') { updatePreroll(); return; }
             if (gameState !== 'playing' && gameState !== 'dying' && gameState !== 'tutorial') return;
             if (gamePaused && (gameState === 'playing' || gameState === 'tutorial')) return;
             // Hit-pause: skip update frames for kill impact feel
@@ -1979,30 +1980,9 @@
                         spawnTutorialEnemy();
                     }
                 } else if (tutorialStep === 3) {
-                    // Step 3: "paint the canvas" — grunt runs across and explodes
-                    const elapsed3 = (Date.now() - tutorialStepStartTime) / 1000;
-                    // Spawn a fast grunt at 0.6s running left to right
-                    if (!tutorialStep3Grunt && elapsed3 >= 0.6) {
-                        const g = new Enemy(-30, canvas.height * 0.55, true);
-                        g.speed = 3.5;
-                        g.tutorialRunAcross = true;
-                        enemies.push(g);
-                        tutorialStep3Grunt = g;
-                    }
-                    // When grunt reaches center, explode it
-                    if (tutorialStep3Grunt && !tutorialStep3Exploded && tutorialStep3Grunt.x >= canvas.width * 0.5) {
-                        spawnPixelDeath(tutorialStep3Grunt.x, tutorialStep3Grunt.y, tutorialStep3Grunt.favoriteColor);
-                        playSound('enemy-death');
-                        screenShake = 3;
-                        enemies = enemies.filter(e => e !== tutorialStep3Grunt);
-                        tutorialStep3Exploded = true;
-                        tutorialStep3ExplodeTime = Date.now();
-                    }
-                    // After explosion, wait a beat then start game
-                    if (tutorialStep3Exploded && Date.now() - tutorialStep3ExplodeTime >= 1200) {
-                        startGame();
-                        return;
-                    }
+                    // Transition to preroll screen
+                    startPreroll();
+                    return;
                 }
                 
                 // Update tutorial enemies
@@ -2496,6 +2476,8 @@
                 drawMenu();
             } else if (gameState === 'tutorial') {
                 drawTutorial();
+            } else if (gameState === 'preroll') {
+                drawPreroll();
             } else if (gameState === 'playing') {
                 // Clean white background — no stars
                 
@@ -2820,30 +2802,6 @@
                 ctx.fillStyle = 'rgba(255,255,255,0.85)';
                 ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 12);
                 
-            } else if (tutorialStep === 3) {
-                // Step 3: white bg → grunt → text → explosion particles
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Grunt runs below text
-                enemies.forEach(enemy => enemy.draw());
-                
-                // Title text on top of grunt
-                const elapsed = (Date.now() - tutorialStepStartTime) / 1000;
-                const fadeIn = Math.min(1, elapsed / 0.8);
-                const fadeOut = elapsed > 1.8 ? Math.max(0, 1 - (elapsed - 1.8) / 0.7) : 1;
-                const alpha = fadeIn * fadeOut;
-                
-                ctx.globalAlpha = alpha;
-                ctx.textAlign = 'center';
-                const fontSize = Math.max(22, Math.floor(canvas.width / 12));
-                ctx.font = `italic ${fontSize}px Georgia, serif`;
-                ctx.fillStyle = '#2a2a2a';
-                ctx.fillText('paint the canvas', canvas.width / 2, cy);
-                ctx.globalAlpha = 1;
-                
-                // Explosion particles on top of everything
-                particles.forEach(particle => particle.draw());
             }
             
             // SKIP button — top right, always visible (except step 3)
@@ -3520,6 +3478,105 @@
                 ctx.fillText('ERROR: ' + e.message, 10, 50);
                 console.error('handleClick error:', e);
             }
+        }
+        
+        // Preroll — "paint the canvas" screen with grunt explosion
+        let prerollStart = 0;
+        let prerollGrunt = null;
+        let prerollExploded = false;
+        let prerollExplodeTime = 0;
+        let prerollParticles = [];
+        
+        function startPreroll() {
+            gameState = 'preroll';
+            prerollStart = Date.now();
+            prerollGrunt = null;
+            prerollExploded = false;
+            prerollExplodeTime = 0;
+            prerollParticles = [];
+            enemies = [];
+            particles = [];
+        }
+        
+        function updatePreroll() {
+            const elapsed = (Date.now() - prerollStart) / 1000;
+            
+            // Spawn grunt at 0.6s
+            if (!prerollGrunt && elapsed >= 0.6) {
+                prerollGrunt = new Enemy(-30, canvas.height * 0.58, true);
+                prerollGrunt.speed = 3.5;
+                prerollGrunt.tutorialRunAcross = true;
+            }
+            
+            // Move grunt
+            if (prerollGrunt && !prerollExploded) {
+                prerollGrunt.update();
+                // Explode at center
+                if (prerollGrunt.x >= canvas.width * 0.5) {
+                    // Spawn explosion particles
+                    for (let i = 0; i < 60; i++) {
+                        const a = Math.random() * Math.PI * 2;
+                        const spd = 1 + Math.random() * 5;
+                        const colors = ['#ff3333','#ff6600','#ffcc00','#33cc33','#3399ff','#cc33ff','#ff0066'];
+                        prerollParticles.push({
+                            x: prerollGrunt.x, y: prerollGrunt.y,
+                            vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+                            color: colors[Math.floor(Math.random() * colors.length)],
+                            life: 40 + Math.random() * 30,
+                            size: 2 + Math.random() * 4
+                        });
+                    }
+                    playSound('enemy-death');
+                    prerollExploded = true;
+                    prerollExplodeTime = Date.now();
+                    prerollGrunt = null;
+                }
+            }
+            
+            // Update particles
+            prerollParticles = prerollParticles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.05; // gravity
+                p.life--;
+                return p.life > 0;
+            });
+            
+            // Start game after explosion
+            if (prerollExploded && Date.now() - prerollExplodeTime >= 1200) {
+                startGame();
+            }
+        }
+        
+        function drawPreroll() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grunt
+            if (prerollGrunt) prerollGrunt.draw();
+            
+            // Draw explosion particles
+            prerollParticles.forEach(p => {
+                ctx.globalAlpha = Math.min(1, p.life / 20);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+            
+            // "paint the canvas" text
+            const elapsed = (Date.now() - prerollStart) / 1000;
+            const fadeIn = Math.min(1, elapsed / 0.8);
+            const textAlpha = prerollExploded ? Math.max(0, 1 - (Date.now() - prerollExplodeTime) / 800) : fadeIn;
+            
+            ctx.globalAlpha = textAlpha;
+            ctx.textAlign = 'center';
+            const fontSize = Math.max(22, Math.floor(canvas.width / 12));
+            ctx.font = `italic ${fontSize}px Georgia, serif`;
+            ctx.fillStyle = '#2a2a2a';
+            ctx.fillText('paint the canvas', canvas.width / 2, canvas.height * 0.42);
+            ctx.globalAlpha = 1;
         }
         
         function spawnTutorialEnemy() {
