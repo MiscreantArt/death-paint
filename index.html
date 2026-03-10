@@ -236,7 +236,8 @@
             }
             preloadBuffer('sounds/death-chime.wav', '_chimeBuffer');
             preloadBuffer('sounds/duck-quack.wav?v=3', '_quackBuffer');
-
+            // Start loading music buffer on first audio init
+            prepareMusic();
         }
 
         function prepareMusic() {
@@ -251,9 +252,24 @@
                     .catch(() => { bgMusic = null; });
             }
         }
+        let _musicRetryInterval = null;
         function startMusic() {
             stopMusic();
-            if (!bgMusicBuffer || !audioCtx) return;
+            if (_musicRetryInterval) { clearInterval(_musicRetryInterval); _musicRetryInterval = null; }
+            if (!audioCtx) return;
+            // Re-resume AudioContext in case iOS suspended it during tutorial
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (!bgMusicBuffer) {
+                // Buffer still loading — retry every 500ms until it's ready
+                _musicRetryInterval = setInterval(() => {
+                    if (bgMusicBuffer && gameState === 'playing') {
+                        clearInterval(_musicRetryInterval);
+                        _musicRetryInterval = null;
+                        startMusic();
+                    }
+                }, 500);
+                return;
+            }
             const source = audioCtx.createBufferSource();
             source.buffer = bgMusicBuffer;
             source.loop = true;
