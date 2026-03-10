@@ -403,14 +403,15 @@
             },
 
             'duck-quack': () => {
-                // Preloaded quack — reuse single instance so it cuts clean
-                if (!soundDefs._quackAudio) {
-                    soundDefs._quackAudio = new Audio('sounds/duck-quack.wav');
-                    soundDefs._quackAudio.volume = 0.5;
+                // Fresh audio each quack — iOS won't replay reused Audio elements reliably
+                if (soundDefs._quackAudio) {
+                    soundDefs._quackAudio.pause();
+                    soundDefs._quackAudio = null;
                 }
-                const q = soundDefs._quackAudio;
-                q.currentTime = 0;
+                const q = new Audio('sounds/duck-quack.wav');
+                q.volume = 0.5;
                 q.play().catch(() => {});
+                soundDefs._quackAudio = q;
                 haptic(15);
             },
 
