@@ -95,6 +95,9 @@
         let tutorialEnemy = null;
         let tutorialStepStartTime = 0;
         let tutorialKills = 0;
+        let tutorialStep3Grunt = null;
+        let tutorialStep3Exploded = false;
+        let tutorialStep3ExplodeTime = 0;
         
         // Kill streak → paint rain system
         function onEnemyKill(tier) {
@@ -1424,6 +1427,18 @@
                     if (this.hitFlash < 0) this.hitFlash = 0;
                 }
                 
+                // Tutorial step 3: run straight across, don't chase player
+                if (this.tutorialRunAcross) {
+                    const finalSpeed = this.speed * enemySpeedMultiplier;
+                    this.x += finalSpeed * frameDt * 60;
+                    this.currentDirection = 'east';
+                    this.animTime += frameDt * 60;
+                    if (Math.floor(this.animTime / 4) !== Math.floor((this.animTime - frameDt * 60) / 4)) {
+                        this.animFrame = (this.animFrame + 1) % 6;
+                    }
+                    return;
+                }
+                
                 // Move toward player — with trait-based personality
                 const dx = player.x - this.x;
                 const dy = player.y - this.y;
@@ -1964,8 +1979,27 @@
                         spawnTutorialEnemy();
                     }
                 } else if (tutorialStep === 3) {
-                    // Step 3: "paint the canvas" — elegant transition
-                    if (Date.now() - tutorialStepStartTime >= 2500) {
+                    // Step 3: "paint the canvas" — grunt runs across and explodes
+                    const elapsed3 = (Date.now() - tutorialStepStartTime) / 1000;
+                    // Spawn a fast grunt at 0.6s running left to right
+                    if (!tutorialStep3Grunt && elapsed3 >= 0.6) {
+                        const g = new Enemy(-30, canvas.height * 0.55, true);
+                        g.speed = 3.5;
+                        g.tutorialRunAcross = true;
+                        enemies.push(g);
+                        tutorialStep3Grunt = g;
+                    }
+                    // When grunt reaches center, explode it
+                    if (tutorialStep3Grunt && !tutorialStep3Exploded && tutorialStep3Grunt.x >= canvas.width * 0.5) {
+                        spawnPixelDeath(tutorialStep3Grunt.x, tutorialStep3Grunt.y, tutorialStep3Grunt.favoriteColor);
+                        playSound('enemy-death');
+                        screenShake = 3;
+                        enemies = enemies.filter(e => e !== tutorialStep3Grunt);
+                        tutorialStep3Exploded = true;
+                        tutorialStep3ExplodeTime = Date.now();
+                    }
+                    // After explosion, wait a beat then start game
+                    if (tutorialStep3Exploded && Date.now() - tutorialStep3ExplodeTime >= 1200) {
                         startGame();
                         return;
                     }
@@ -3515,6 +3549,9 @@
             tutorialMoveDist = 0;
             tutorialEnemy = null;
             tutorialKills = 0;
+            tutorialStep3Grunt = null;
+            tutorialStep3Exploded = false;
+            tutorialStep3ExplodeTime = 0;
             tutorialStepStartTime = Date.now();
             
             // Reset game variables (lighter setup than full game)
