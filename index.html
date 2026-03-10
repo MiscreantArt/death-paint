@@ -447,7 +447,7 @@
 
             'duck-quack': () => {
                 // Fresh Audio each quack — original working approach
-                const quack = new Audio('sounds/duck-quack.wav');
+                const quack = new Audio('sounds/duck-quack.wav?v=2');
                 quack.volume = 0.5;
                 quack.play().catch(() => {});
                 haptic(15);
