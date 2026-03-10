@@ -1970,7 +1970,7 @@
         // Wave definitions — each wave is an array of "bursts"
         // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
         const WAVE_DEFS = [
-            // Wave 1: 5 solo grunts (handled by firstFiveSpawned), then 5 more grunts spaced out
+            // Wave 1: 5 solo grunts (handled by firstFiveSpawned) + 5 more solo = 10 total
             { bursts: [
                 { count: 1, types: ['grunt'], delay: 2000 },
                 { count: 1, types: ['grunt'], delay: 2000 },
@@ -1978,26 +1978,28 @@
                 { count: 1, types: ['grunt'], delay: 2000 },
                 { count: 1, types: ['grunt'], delay: 2000 },
             ]},
-            // Wave 2: pairs with some greens
+            // Wave 2: pairs of grunt+green, 5 pairs = 10 total
             { bursts: [
-                { count: 2, types: ['grunt', 'grunt'], delay: 2500 },
                 { count: 2, types: ['grunt', 'green'], delay: 2500 },
-                { count: 2, types: ['grunt', 'grunt'], delay: 2500 },
+                { count: 2, types: ['green', 'grunt'], delay: 2500 },
+                { count: 2, types: ['grunt', 'green'], delay: 2500 },
                 { count: 2, types: ['green', 'grunt'], delay: 2500 },
                 { count: 2, types: ['grunt', 'green'], delay: 2500 },
             ]},
-            // Wave 3: triples then quads — white + green + grunt
+            // Wave 3: triples with white boss, 4 groups = 12 total
             { bursts: [
-                { count: 3, types: ['grunt', 'green', 'grunt'], delay: 3000 },
-                { count: 3, types: ['grunt', 'whiteBoss', 'green'], delay: 3000 },
-                { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 3500 },
-                { count: 4, types: ['grunt', 'grunt', 'green', 'whiteBoss'], delay: 3500 },
+                { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 3000 },
+                { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 3000 },
+                { count: 3, types: ['green', 'whiteBoss', 'grunt'], delay: 3000 },
+                { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 3000 },
             ]},
-            // Wave 4: triples x3 — harder enemies only
+            // Wave 4: triples with ALL enemy types, 5 groups = 15 total
             { bursts: [
-                { count: 3, types: ['whiteBoss', 'green', 'darkBoss'], delay: 3500 },
-                { count: 3, types: ['darkBoss', 'whiteBoss', 'green'], delay: 3500 },
-                { count: 3, types: ['whiteBoss', 'darkBoss', 'whiteBoss'], delay: 3500 },
+                { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 3000 },
+                { count: 3, types: ['darkBoss', 'grunt', 'green'], delay: 3000 },
+                { count: 3, types: ['whiteBoss', 'darkBoss', 'grunt'], delay: 3000 },
+                { count: 3, types: ['green', 'whiteBoss', 'darkBoss'], delay: 3000 },
+                { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 3000 },
             ]},
         ];
         let waveBurstIndex = 0;
