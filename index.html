@@ -566,7 +566,7 @@
         // Power-up types with moonbird mapping
         const powerUpTypes = [
             { type: 'chromie', birdId: 12, color: '#ff00ff', duration: 0 },    // Rainbow trail + shockwave sound
-            { type: 'duck', birdId: 5568, color: '#ffdd00', duration: 4000 },    // Duck noises — cute then gone
+            { type: 'duck', birdId: 5568, color: '#ffdd00', duration: 5, killBased: true },    // Duck — 5 kills
             { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 }  // Death touch - melee kills, but vulnerable to shots
         ];
         
@@ -1889,8 +1889,12 @@
         
         // Intro: first 10 are grunts, then continuous random spawning
         let introGruntsSpawned = 0;
-        const INTRO_GRUNT_COUNT = 10;
-        const INTRO_SPAWN_INTERVAL = 800; // ms between intro grunts
+        const INTRO_GRUNT_COUNT = 8;
+        const INTRO_SPAWN_INTERVAL = 1200; // ms between intro grunts — more breathing room
+        let wave2Started = false;
+        let wave2Spawned = 0;
+        const WAVE2_COUNT = 6;
+        const WAVE2_SPAWN_INTERVAL = 900;
         
         // Continuous enemy spawning
         function spawnSingleEnemy() {
@@ -2032,30 +2036,38 @@
             // Update game time and progressive difficulty
             gameTime = (Date.now() - gameStartTime) / 1000;
             
-            // Tick down time-based buffs 
-            const buffDt = frameDt * 1000; // dt is in seconds, buffs are in ms
-            if (playerBuffs.duck > 0) {
-                playerBuffs.duck -= buffDt;
-                if (playerBuffs.duck <= 0) {
-                    playerBuffs.duck = 0;
-                    // Duck buff expired
-                    playSound('powerup-expire');
-                }
-            }
+            // Duck buff is now kill-based (decremented on enemy kill), not time-based
+            // Just check for expiry here
+            if (playerBuffs.duck < 0) playerBuffs.duck = 0;
             
             // === SPAWNING ===
             const currentTime = Date.now();
             
             if (introGruntsSpawned < INTRO_GRUNT_COUNT) {
-                // First 10: grunts only, one by one
+                // Wave 1: grunts only, spaced out
                 if (currentTime - lastEnemySpawnTime >= INTRO_SPAWN_INTERVAL) {
                     const pos = getEdgeSpawnPos();
                     enemies.push(new Enemy(pos.x, pos.y, true));
                     introGruntsSpawned++;
                     lastEnemySpawnTime = currentTime;
                 }
+            } else if (wave2Spawned < WAVE2_COUNT) {
+                // Wave 2: mixed — greens + white bosses start appearing, faster pace
+                if (!wave2Started) {
+                    wave2Started = true;
+                    lastEnemySpawnTime = currentTime; // reset timer for wave 2
+                }
+                if (currentTime - lastEnemySpawnTime >= WAVE2_SPAWN_INTERVAL) {
+                    const pos = getEdgeSpawnPos();
+                    // Alternate: green, grunt, green, grunt, white boss, grunt
+                    const pattern = [false, true, false, true, false, true];
+                    const forceGrunt = pattern[wave2Spawned % pattern.length];
+                    enemies.push(new Enemy(pos.x, pos.y, forceGrunt));
+                    wave2Spawned++;
+                    lastEnemySpawnTime = currentTime;
+                }
             } else {
-                // Continuous random spawning
+                // Free-for-all: continuous random spawning
                 // Spawn delay tightens over time: 1000ms → 500ms
                 const nextSpawnDelay = Math.max(500, 1000 - gameTime * 3);
                 
@@ -2138,6 +2150,14 @@
                             score += points;
                             killCount++;
                             onEnemyKill(enemy.tier);
+                            // Duck buff: decrement on kill
+                            if (playerBuffs.duck > 0 && proj.isDuck) {
+                                playerBuffs.duck--;
+                                if (playerBuffs.duck <= 0) {
+                                    playerBuffs.duck = 0;
+                                    playSound('powerup-expire');
+                                }
+                            }
                             
                             // Death explosion — skully overrides all, then duck, then normal
                             if (playerBuffs.skully > 0) {
@@ -3662,6 +3682,8 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             introGruntsSpawned = 0;
+            wave2Started = false;
+            wave2Spawned = 0;
         }
 
         function startGame() {
@@ -3729,6 +3751,8 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             introGruntsSpawned = 0;
+            wave2Started = false;
+            wave2Spawned = 0;
         }
         
         function restartGame() {
