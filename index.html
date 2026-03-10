@@ -3821,11 +3821,14 @@
                 update(dt);
                 draw();
             } catch(e) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = 'red';
-                ctx.font = '14px Arial';
+                ctx.font = 'bold 16px Arial';
                 ctx.textAlign = 'left';
-                ctx.fillText('CRASH: ' + e.message, 10, 80);
-                ctx.fillText('at: ' + e.stack?.split('\n')[1]?.trim(), 10, 100);
+                ctx.fillText('CRASH: ' + e.message, 10, 40);
+                ctx.fillText('at: ' + (e.stack?.split('\n')[1]?.trim() || ''), 10, 65);
+                ctx.fillText('wave: ' + currentWave + ' state: ' + gameState, 10, 90);
                 console.error('Game loop crash:', e);
             }
             requestAnimationFrame(gameLoop);
