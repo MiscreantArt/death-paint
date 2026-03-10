@@ -2787,7 +2787,10 @@
                 ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 12);
                 
             } else if (tutorialStep === 3) {
-                // Step 3: elegant "paint the canvas" in black
+                // Step 3: "paint the canvas" on clean white
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
                 const elapsed = (Date.now() - tutorialStepStartTime) / 1000;
                 const fadeIn = Math.min(1, elapsed / 0.8);
                 const fadeOut = elapsed > 1.8 ? Math.max(0, 1 - (elapsed - 1.8) / 0.7) : 1;
