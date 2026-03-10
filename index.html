@@ -3886,6 +3886,17 @@
             requestAnimationFrame(gameLoop);
         }
         
+        // Pause/resume when leaving/returning to app
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (bgMusic) bgMusic.pause();
+                if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+            } else {
+                if (bgMusic && gameState === 'playing') bgMusic.play().catch(() => {});
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            }
+        });
+        
         init();
     </script>
 </body>
