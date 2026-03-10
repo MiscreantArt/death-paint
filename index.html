@@ -3434,6 +3434,8 @@
                 initAudio(); // Init AudioContext on first user gesture (mobile requirement)
                 if (gameState === 'menu') {
                     playSound('menu-tap');
+                    // Start music now (during user gesture) — will play through tutorial
+                    startMusic();
                     // Tutorial every time with skip option
                     startTutorial();
                 } else if (gameState === 'gallery') {
@@ -3678,7 +3680,8 @@
             rainbowActive = false;
             rainbowTimer = 0;
             gameState = 'playing';
-            startMusic();
+            // Music already started on menu tap — just ensure it's playing
+            if (!bgMusic) startMusic();
             score = 0;
             killCount = 0;
             
