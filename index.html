@@ -221,6 +221,12 @@
                 soundDefs._deathChime = new Audio('sounds/death-chime.wav');
                 soundDefs._deathChime.load();
             }
+            // Preload duck quack — must init during user gesture for iOS
+            if (!soundDefs._quackAudio) {
+                soundDefs._quackAudio = new Audio('sounds/duck-quack.wav?v=2');
+                soundDefs._quackAudio.volume = 0.5;
+                soundDefs._quackAudio.load();
+            }
 
         }
 
@@ -446,10 +452,14 @@
             },
 
             'duck-quack': () => {
-                // Fresh Audio each quack — original working approach
-                const quack = new Audio('sounds/duck-quack.wav?v=2');
-                quack.volume = 0.5;
-                quack.play().catch(() => {});
+                // Preloaded in initAudio — reuse like death chime (iOS requires preload during gesture)
+                if (!soundDefs._quackAudio) {
+                    soundDefs._quackAudio = new Audio('sounds/duck-quack.wav?v=2');
+                    soundDefs._quackAudio.volume = 0.5;
+                }
+                const q = soundDefs._quackAudio;
+                q.currentTime = 0;
+                q.play().catch(() => {});
                 haptic(15);
             },
 
