@@ -1328,24 +1328,27 @@
         
         // Enemy class
         class Enemy {
-            constructor(x, y, forceGrunt = false) {
+            constructor(x, y, forceGrunt = false, forceType = null) {
                 this.x = x;
                 this.y = y;
                 this.size = 36;
                 
-                // Time-based type phasing
-                let gruntChance = 0.68, greenChance = 0.15, whiteBossChance = 0.10;
-                // remainder (7%) = dark bosses
-                if (forceGrunt) {
-                    gruntChance = 1.0; greenChance = 0; whiteBossChance = 0;
-                } else if (gameTime < 20) {
-                    // Intro: grunts + greens start showing early
-                    gruntChance = 0.85; greenChance = 0.15; whiteBossChance = 0;
-                } else if (gameTime < 40) {
-                    // White bosses join
-                    gruntChance = 0.70; greenChance = 0.18; whiteBossChance = 0.12;
+                // Type selection — forceType overrides everything
+                let gruntChance, greenChance, whiteBossChance;
+                if (forceType === 'grunt') {
+                    gruntChance = 1; greenChance = 0; whiteBossChance = 0;
+                } else if (forceType === 'green') {
+                    gruntChance = 0; greenChance = 1; whiteBossChance = 0;
+                } else if (forceType === 'whiteBoss') {
+                    gruntChance = 0; greenChance = 0; whiteBossChance = 1;
+                } else if (forceType === 'darkBoss') {
+                    gruntChance = 0; greenChance = 0; whiteBossChance = 0;
+                } else if (forceGrunt) {
+                    gruntChance = 1; greenChance = 0; whiteBossChance = 0;
+                } else {
+                    // Free-for-all mix
+                    gruntChance = 0.68; greenChance = 0.15; whiteBossChance = 0.10;
                 }
-                // else: full mix (68/15/10/7 dark)
                 
                 const roll = Math.random();
                 if (roll < gruntChance) {
@@ -1888,13 +1891,19 @@
         }
         
         // Intro: first 10 are grunts, then continuous random spawning
-        let introGruntsSpawned = 0;
-        const INTRO_GRUNT_COUNT = 8;
-        const INTRO_SPAWN_INTERVAL = 1200; // ms between intro grunts — more breathing room
-        let wave2Started = false;
-        let wave2Spawned = 0;
-        const WAVE2_COUNT = 6;
-        const WAVE2_SPAWN_INTERVAL = 900;
+        // Wave system — 4 waves of 10, then free-for-all
+        let currentWave = 1;
+        let waveSpawned = 0;
+        const WAVE_SIZE = 10;
+        // Waves get faster: 1200ms → 1000ms → 800ms → 600ms
+        const WAVE_INTERVALS = [1200, 1000, 800, 600];
+        // Wave compositions: [gruntWeight, greenWeight, whiteBossWeight, darkBossWeight]
+        const WAVE_MIX = [
+            [1, 0, 0, 0],       // Wave 1: all grunts
+            [0.7, 0.3, 0, 0],   // Wave 2: grunts + greens
+            [0.6, 0.2, 0.2, 0], // Wave 3: grunts + greens + white bosses
+            [0.5, 0.2, 0.15, 0.15], // Wave 4: full roster
+        ];
         
         // Continuous enemy spawning
         function spawnSingleEnemy() {
@@ -2043,33 +2052,32 @@
             // === SPAWNING ===
             const currentTime = Date.now();
             
-            if (introGruntsSpawned < INTRO_GRUNT_COUNT) {
-                // Wave 1: grunts only, spaced out
-                if (currentTime - lastEnemySpawnTime >= INTRO_SPAWN_INTERVAL) {
+            if (currentWave <= 4) {
+                // Waves 1-4: 10 enemies each, spawning closer together
+                const interval = WAVE_INTERVALS[currentWave - 1];
+                if (currentTime - lastEnemySpawnTime >= interval) {
                     const pos = getEdgeSpawnPos();
-                    enemies.push(new Enemy(pos.x, pos.y, true));
-                    introGruntsSpawned++;
+                    const mix = WAVE_MIX[currentWave - 1];
+                    // Pick type based on wave mix weights
+                    const roll = Math.random();
+                    let type = 'grunt';
+                    if (roll >= mix[0] + mix[1] + mix[2]) type = 'darkBoss';
+                    else if (roll >= mix[0] + mix[1]) type = 'whiteBoss';
+                    else if (roll >= mix[0]) type = 'green';
+                    
+                    enemies.push(new Enemy(pos.x, pos.y, false, type));
+                    waveSpawned++;
                     lastEnemySpawnTime = currentTime;
-                }
-            } else if (wave2Spawned < WAVE2_COUNT) {
-                // Wave 2: mixed — greens + white bosses start appearing, faster pace
-                if (!wave2Started) {
-                    wave2Started = true;
-                    lastEnemySpawnTime = currentTime; // reset timer for wave 2
-                }
-                if (currentTime - lastEnemySpawnTime >= WAVE2_SPAWN_INTERVAL) {
-                    const pos = getEdgeSpawnPos();
-                    // Alternate: green, grunt, green, grunt, white boss, grunt
-                    const pattern = [false, true, false, true, false, true];
-                    const forceGrunt = pattern[wave2Spawned % pattern.length];
-                    enemies.push(new Enemy(pos.x, pos.y, forceGrunt));
-                    wave2Spawned++;
-                    lastEnemySpawnTime = currentTime;
+                    
+                    if (waveSpawned >= WAVE_SIZE) {
+                        currentWave++;
+                        waveSpawned = 0;
+                    }
                 }
             } else {
                 // Free-for-all: continuous random spawning
-                // Spawn delay tightens over time: 1000ms → 500ms
-                const nextSpawnDelay = Math.max(500, 1000 - gameTime * 3);
+                // Spawn delay tightens over time: 800ms → 400ms
+                const nextSpawnDelay = Math.max(400, 800 - gameTime * 3);
                 
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
                     spawnSingleEnemy();
@@ -2183,7 +2191,7 @@
                             // Power-up drop: ~12% per kill, but not during intro and not before 10s
                             // Drop ~once every 12 kills, not during intro or active power-up
                             const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || rainbowActive;
-                            if (!anyBuffActive && introGruntsSpawned >= INTRO_GRUNT_COUNT && gameTime > 10 && Math.random() < 0.08) {
+                            if (!anyBuffActive && currentWave > 1 && gameTime > 10 && Math.random() < 0.08) {
                                 const dropTypes = ['duck', 'skully', 'chromie'];
                                 const dropType = dropTypes[Math.floor(Math.random() * 3)];
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
@@ -3681,9 +3689,7 @@
             // Initialize stars
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            introGruntsSpawned = 0;
-            wave2Started = false;
-            wave2Spawned = 0;
+            currentWave = 1; waveSpawned = 0;
         }
 
         function startGame() {
@@ -3750,9 +3756,7 @@
             // Initialize stars and reset continuous spawning
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            introGruntsSpawned = 0;
-            wave2Started = false;
-            wave2Spawned = 0;
+            currentWave = 1; waveSpawned = 0;
         }
         
         function restartGame() {
