@@ -3317,7 +3317,7 @@
         
         function handleTouchMove(e) {
             e.preventDefault();
-            if (gameState !== 'playing') return;
+            if (gameState !== 'playing' && gameState !== 'tutorial') return;
             
             const rect = canvas.getBoundingClientRect();
             
@@ -3377,7 +3377,7 @@
         
         function handleTouchEnd(e) {
             e.preventDefault();
-            if (gameState !== 'playing') return;
+            if (gameState !== 'playing' && gameState !== 'tutorial') return;
             
             // Process each ended touch
             for (let i = 0; i < e.changedTouches.length; i++) {
