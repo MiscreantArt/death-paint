@@ -570,10 +570,10 @@
             try {
                 // Foot shadow — oval at the bottom of the sprite
                 ctx.save();
-                ctx.globalAlpha = 0.3;
+                ctx.globalAlpha = 0.12;
                 ctx.fillStyle = '#000';
                 ctx.beginPath();
-                ctx.ellipse(x, y + size * 0.85, size * 0.5, size * 0.15, 0, 0, Math.PI * 2);
+                ctx.ellipse(x, y + size * 0.85, size * 0.3, size * 0.08, 0, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
                 // Draw sprite
