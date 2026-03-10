@@ -3838,6 +3838,8 @@
                 ctx.fillText('at: ' + (e.stack?.split('\n')[1]?.trim() || ''), 10, 65);
                 ctx.fillText('wave: ' + currentWave + ' burst: ' + waveBurstIndex + '/' + burstSpawned + ' state: ' + gameState, 10, 90);
                 console.error('Game loop crash:', e);
+                gameState = 'crashed';
+                return; // Stop the loop
             }
             requestAnimationFrame(gameLoop);
         }
