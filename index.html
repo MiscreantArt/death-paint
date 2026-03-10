@@ -2136,15 +2136,35 @@
                 
 
                 
-                // Schedule all enemies to chain-explode using their normal death splatter
-                const enemyCopy = [...enemies];
+                // === FIREWORKS — enemies freeze, then pop one by one from nearest to farthest ===
+                // Sort by distance from player (closest first)
+                enemies.sort((a, b) => {
+                    const da = (a.x - player.x) ** 2 + (a.y - player.y) ** 2;
+                    const db = (b.x - player.x) ** 2 + (b.y - player.y) ** 2;
+                    return da - db;
+                });
                 
-                enemyCopy.forEach((enemy, idx) => {
+                // Mark all enemies as frozen
+                enemies.forEach(e => { e.frozen = true; e.deathFlash = 0; });
+                
+                // Stagger timing: 200ms apart, starting 400ms after hero burst
+                const fireworkDelay = 400;
+                const fireworkInterval = Math.min(200, 2000 / Math.max(enemies.length, 1)); // cap so it doesn't take forever
+                
+                enemies.forEach((enemy, idx) => {
+                    // Flash white briefly before popping
                     setTimeout(() => {
                         if (gameState !== 'dying') return;
-                        haptic(12);
+                        enemy.deathFlash = 1; // signal to draw white
+                    }, fireworkDelay + idx * fireworkInterval - 100);
+                    
+                    // Pop!
+                    setTimeout(() => {
+                        if (gameState !== 'dying') return;
+                        haptic(15);
+                        screenShake = Math.max(screenShake, enemy.isBoss ? 6 : 3);
                         
-                        // Use the same splatter as normal kills
+                        // Normal death splatter
                         if (enemy.isDarkBoss) {
                             spawnDarkSplat(enemy.x, enemy.y);
                         } else if (enemy.isBoss) {
@@ -2155,23 +2175,23 @@
                             spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
                         }
                         playSound('enemy-death');
-                    }, 80 + idx * 100); // stagger explosions ~100ms apart
+                        
+                        // Remove this enemy from the array
+                        const eIdx = enemies.indexOf(enemy);
+                        if (eIdx >= 0) enemies.splice(eIdx, 1);
+                    }, fireworkDelay + idx * fireworkInterval);
                 });
                 
-                // After all explosions + drift, transition to gameOver
-                // Match death chime: 8 notes × 250ms + small breath
-                const totalDeathTime = 2700;
+                // After all fireworks, transition to gameOver
+                const totalFireworkTime = fireworkDelay + enemies.length * fireworkInterval + 600;
+                const totalDeathTime = Math.max(totalFireworkTime, 2700);
                 setTimeout(() => {
                     if (gameState !== 'dying') return;
+                    enemies = []; // clean up any stragglers
                     gameState = 'gameOver';
                     gameOverTime = Date.now();
                     playSound('game-over');
                 }, totalDeathTime);
-            }
-            
-            // Clear enemies during death sequence (they explode via setTimeout)
-            if (gameState === 'dying') {
-                enemies = [];
             }
 
         function captureArt() {
@@ -2449,7 +2469,23 @@
                     fireTrails = [];
                 }
                 
-                // Draw hero drift pixels (just the hero burst, not enemy drift)
+                // Draw frozen enemies (flash white before they pop)
+                enemies.forEach(enemy => {
+                    if (enemy.deathFlash) {
+                        // White flash — draw as bright silhouette
+                        ctx.save();
+                        ctx.globalAlpha = 0.9;
+                        ctx.fillStyle = '#ffffff';
+                        ctx.beginPath();
+                        ctx.arc(enemy.x, enemy.y, enemy.size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    } else {
+                        enemy.draw();
+                    }
+                });
+                
+                // Draw hero drift pixels
                 dyingDriftPixels.forEach(p => {
                     ctx.fillStyle = p.color;
                     ctx.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
