@@ -2821,10 +2821,14 @@
                 ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 12);
                 
             } else if (tutorialStep === 3) {
-                // Step 3: "paint the canvas" on clean white — no player
+                // Step 3: white bg → grunt → text → explosion particles
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
+                // Grunt runs below text
+                enemies.forEach(enemy => enemy.draw());
+                
+                // Title text on top of grunt
                 const elapsed = (Date.now() - tutorialStepStartTime) / 1000;
                 const fadeIn = Math.min(1, elapsed / 0.8);
                 const fadeOut = elapsed > 1.8 ? Math.max(0, 1 - (elapsed - 1.8) / 0.7) : 1;
@@ -2838,8 +2842,7 @@
                 ctx.fillText('paint the canvas', canvas.width / 2, cy);
                 ctx.globalAlpha = 1;
                 
-                // Draw grunt + particles ON TOP of the white bg
-                enemies.forEach(enemy => enemy.draw());
+                // Explosion particles on top of everything
                 particles.forEach(particle => particle.draw());
             }
             
