@@ -1901,22 +1901,42 @@
         let wavePause = 0; // ms timestamp when wave gap started
         const WAVE_GAP = 2500; // 2.5s breather between waves
         let firstFiveSpawned = 0; // first 5 grunts are solo (one at a time)
-        // Wave compositions: [gruntWeight, greenWeight, whiteBossWeight, darkBossWeight]
-        // Guaranteed intros + random fill
-        // Each wave guarantees a few of the new type, rest is random from the pool
-        const WAVE_GUARANTEED = [
-            // [minGrunt, minGreen, minWhiteBoss, minDarkBoss] — rest filled randomly from pool
-            [10, 0, 0, 0],      // Wave 1: all grunts
-            [2, 2, 0, 0],       // Wave 2: at least 2 greens, 2 grunts, rest random grunt/green
-            [2, 0, 2, 0],       // Wave 3: at least 2 white bosses, rest random from grunt/green/white
-            [1, 0, 0, 2],       // Wave 4: at least 2 dark bosses, rest random from everything
+        // Wave definitions — each wave is an array of "bursts"
+        // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
+        const WAVE_DEFS = [
+            // Wave 1: 5 solo grunts (handled by firstFiveSpawned), then 5 more grunts spaced out
+            { bursts: [
+                { count: 1, types: ['grunt'], delay: 2000 },
+                { count: 1, types: ['grunt'], delay: 2000 },
+                { count: 1, types: ['grunt'], delay: 2000 },
+                { count: 1, types: ['grunt'], delay: 2000 },
+                { count: 1, types: ['grunt'], delay: 2000 },
+            ]},
+            // Wave 2: pairs with some greens
+            { bursts: [
+                { count: 2, types: ['grunt', 'grunt'], delay: 2500 },
+                { count: 2, types: ['grunt', 'green'], delay: 2500 },
+                { count: 2, types: ['grunt', 'grunt'], delay: 2500 },
+                { count: 2, types: ['green', 'grunt'], delay: 2500 },
+                { count: 2, types: ['grunt', 'green'], delay: 2500 },
+            ]},
+            // Wave 3: triples then quads — white + green + grunt
+            { bursts: [
+                { count: 3, types: ['grunt', 'green', 'grunt'], delay: 3000 },
+                { count: 3, types: ['grunt', 'whiteBoss', 'green'], delay: 3000 },
+                { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 3500 },
+                { count: 4, types: ['grunt', 'grunt', 'green', 'whiteBoss'], delay: 3500 },
+            ]},
+            // Wave 4: quads x3 — full roster
+            { bursts: [
+                { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 3000 },
+                { count: 4, types: ['grunt', 'darkBoss', 'green', 'grunt'], delay: 3000 },
+                { count: 4, types: ['grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 3000 },
+            ]},
         ];
-        const WAVE_POOL = [
-            ['grunt'],                                    // Wave 1 pool
-            ['grunt', 'grunt', 'green'],                  // Wave 2 pool (grunts more likely)
-            ['grunt', 'grunt', 'green', 'whiteBoss'],     // Wave 3 pool
-            ['grunt', 'grunt', 'green', 'whiteBoss', 'darkBoss'], // Wave 4 pool
-        ];
+        let waveBurstIndex = 0;
+        let burstSpawned = 0;
+        let burstDelay = 300; // ms between enemies within a burst
         
         // Continuous enemy spawning
         function spawnSingleEnemy() {
@@ -2074,51 +2094,40 @@
                     lastEnemySpawnTime = currentTime;
                 }
             } else if (currentWave <= 4) {
+                const waveDef = WAVE_DEFS[currentWave - 1];
+                
                 // Gap between waves
                 if (wavePause > 0) {
                     if (currentTime - wavePause >= WAVE_GAP) {
                         wavePause = 0;
                         lastEnemySpawnTime = currentTime;
-                    } else {
-                        // waiting — skip spawn
                     }
-                }
-                // Build shuffled queue on first spawn of each wave
-                if (wavePause === 0 && (!waveQueue || waveQueue.length === 0)) {
-                    const wi = currentWave - 1;
-                    const g = WAVE_GUARANTEED[wi];
-                    const queue = [];
-                    // Add guaranteed enemies
-                    for (let i = 0; i < g[0]; i++) queue.push('grunt');
-                    for (let i = 0; i < g[1]; i++) queue.push('green');
-                    for (let i = 0; i < g[2]; i++) queue.push('whiteBoss');
-                    for (let i = 0; i < g[3]; i++) queue.push('darkBoss');
-                    // Fill rest randomly from pool
-                    const pool = WAVE_POOL[wi];
-                    while (queue.length < WAVE_SIZE) {
-                        queue.push(pool[Math.floor(Math.random() * pool.length)]);
-                    }
-                    // Shuffle
-                    for (let i = queue.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [queue[i], queue[j]] = [queue[j], queue[i]];
-                    }
-                    waveQueue = queue;
-                }
-                
-                const interval = WAVE_INTERVALS[currentWave - 1];
-                if (wavePause === 0 && currentTime - lastEnemySpawnTime >= interval) {
-                    const pos = getEdgeSpawnPos();
-                    const type = waveQueue.shift();
-                    enemies.push(new Enemy(pos.x, pos.y, false, type));
-                    waveSpawned++;
-                    lastEnemySpawnTime = currentTime;
+                } else if (waveBurstIndex < waveDef.bursts.length) {
+                    const burst = waveDef.bursts[waveBurstIndex];
                     
-                    if (waveSpawned >= WAVE_SIZE) {
-                        currentWave++;
-                        waveSpawned = 0;
-                        waveQueue = null;
-                        if (currentWave <= 4) wavePause = currentTime; // gap before next wave
+                    if (burstSpawned < burst.count) {
+                        // Spawn enemies within burst (close together)
+                        if (currentTime - lastEnemySpawnTime >= burstDelay) {
+                            const pos = getEdgeSpawnPos();
+                            const type = burst.types[burstSpawned % burst.types.length];
+                            enemies.push(new Enemy(pos.x, pos.y, false, type));
+                            burstSpawned++;
+                            lastEnemySpawnTime = currentTime;
+                        }
+                    } else {
+                        // Burst done — wait for delay before next burst
+                        if (currentTime - lastEnemySpawnTime >= burst.delay) {
+                            waveBurstIndex++;
+                            burstSpawned = 0;
+                        }
+                    }
+                } else {
+                    // Wave done — gap before next
+                    currentWave++;
+                    waveBurstIndex = 0;
+                    burstSpawned = 0;
+                    if (currentWave <= 4) {
+                        wavePause = currentTime;
                     }
                 }
             } else {
@@ -3736,7 +3745,7 @@
             // Initialize stars
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0; firstFiveSpawned = 0;
+            currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
         }
 
         function startGame() {
@@ -3803,7 +3812,7 @@
             // Initialize stars and reset continuous spawning
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0; firstFiveSpawned = 0;
+            currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
         }
         
         function restartGame() {
