@@ -228,11 +228,14 @@
                 soundDefs._deathChime = new Audio('sounds/death-chime.wav');
                 soundDefs._deathChime.load();
             }
-            // Preload duck quack — must init during user gesture for iOS
-            if (!soundDefs._quackAudio) {
-                soundDefs._quackAudio = new Audio('sounds/duck-quack.wav?v=2');
-                soundDefs._quackAudio.volume = 0.5;
-                soundDefs._quackAudio.load();
+            // Preload duck quack as AudioBuffer for instant overlapping playback
+            if (!soundDefs._quackBuffer && !soundDefs._quackLoading) {
+                soundDefs._quackLoading = true;
+                fetch('sounds/duck-quack.wav?v=2')
+                    .then(r => r.arrayBuffer())
+                    .then(buf => audioCtx.decodeAudioData(buf))
+                    .then(decoded => { soundDefs._quackBuffer = decoded; })
+                    .catch(() => {});
             }
 
         }
@@ -458,14 +461,15 @@
             },
 
             'duck-quack': () => {
-                if (!soundDefs._quackAudio) {
-                    soundDefs._quackAudio = new Audio('sounds/duck-quack.wav?v=2');
-                    soundDefs._quackAudio.volume = 0.5;
+                if (soundDefs._quackBuffer && audioCtx) {
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = soundDefs._quackBuffer;
+                    const gain = audioCtx.createGain();
+                    gain.gain.value = 0.5;
+                    source.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    source.start(0);
                 }
-                // Clone so overlapping quacks work
-                const q = soundDefs._quackAudio.cloneNode();
-                q.volume = 0.5;
-                q.play().catch(() => {});
                 haptic(15);
             },
 
