@@ -1672,10 +1672,12 @@
                     else if (this.duckDir === 'south') duckDir = 'down';
                     
                     const duckImg = duckProjectileSprites[duckDir];
-                    if (duckImg && duckImg.complete) {
+                    if (duckImg && duckImg.complete && duckImg.naturalWidth > 0) {
+                        try {
                         ctx.shadowBlur = 8;
                         ctx.shadowColor = '#ffdd00';
                         ctx.drawImage(duckImg, this.x - duckSize/2, this.y - duckSize/2, duckSize, duckSize);
+                        } catch(e) {}
                     } else {
                         // Fallback yellow circle
                         ctx.fillStyle = '#ffdd00';
@@ -1839,11 +1841,19 @@
                 const bounceY = Math.sin(this.bounce) * 6; // gentle float
                 
                 const spriteIcon = sprites.powerUps[this.type];
-                if (spriteIcon && spriteIcon.complete) {
-                    ctx.drawImage(spriteIcon, this.x - halfIcon, this.y - halfIcon + bounceY, iconSize, iconSize);
+                if (spriteIcon && spriteIcon.complete && spriteIcon.naturalWidth > 0) {
+                    try {
+                        ctx.drawImage(spriteIcon, this.x - halfIcon, this.y - halfIcon + bounceY, iconSize, iconSize);
+                    } catch(e) {
+                        // Fallback on draw error
+                        ctx.fillStyle = powerUp?.color || '#888';
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y + bounceY, 20, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 } else {
                     // Fallback colored circle
-                    ctx.fillStyle = powerUp.color;
+                    ctx.fillStyle = powerUp?.color || '#888';
                     ctx.beginPath();
                     ctx.arc(this.x, this.y + bounceY, 20, 0, Math.PI * 2);
                     ctx.fill();
