@@ -1914,7 +1914,7 @@
         // Spawn intervals per wave (ms between enemies)
         const WAVE_INTERVALS = [2000, 1600, 1300, 1000];
         let wavePause = 0; // ms timestamp when wave gap started
-        const WAVE_GAP = 2500; // 2.5s breather between waves
+        const WAVE_GAP = 3500; // 3.5s breather between waves
         let firstFiveSpawned = 0; // first 5 grunts are solo (one at a time)
         // Wave definitions — each wave is an array of "bursts"
         // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
@@ -1942,11 +1942,11 @@
                 { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 3500 },
                 { count: 4, types: ['grunt', 'grunt', 'green', 'whiteBoss'], delay: 3500 },
             ]},
-            // Wave 4: quads x3 — full roster
+            // Wave 4: triples x3 — harder enemies only
             { bursts: [
-                { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 3000 },
-                { count: 4, types: ['grunt', 'darkBoss', 'green', 'grunt'], delay: 3000 },
-                { count: 4, types: ['grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 3000 },
+                { count: 3, types: ['whiteBoss', 'green', 'darkBoss'], delay: 3500 },
+                { count: 3, types: ['darkBoss', 'whiteBoss', 'green'], delay: 3500 },
+                { count: 3, types: ['whiteBoss', 'darkBoss', 'whiteBoss'], delay: 3500 },
             ]},
         ];
         let waveBurstIndex = 0;
@@ -2147,18 +2147,18 @@
                     }
                 }
             } else {
-                // Free-for-all: original ramp
-                const nextSpawnDelay = Math.max(500, 1000 - gameTime * 3);
+                // Free-for-all: gentler ramp
+                const nextSpawnDelay = Math.max(600, 1500 - gameTime * 2);
                 
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
                     spawnSingleEnemy();
                 }
                 
-                // Gradual difficulty
-                if (Math.floor(gameTime / 25) > Math.floor((gameTime - 0.016) / 25)) {
-                    enemySpeedMultiplier += 0.05;
+                // Gradual difficulty — every 35s instead of 25s
+                if (Math.floor(gameTime / 35) > Math.floor((gameTime - 0.016) / 35)) {
+                    enemySpeedMultiplier += 0.04;
                     playerSpeedBonus += 0.02;
-                    maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
+                    maxEnemiesOnScreen = Math.min(20, maxEnemiesOnScreen + 1);
                 }
             }
             } catch(spawnErr) {
@@ -2464,7 +2464,7 @@
             }
 
         function captureArt() {
-                const artScale = 4;
+                const artScale = 6;
                 const artCanvas = document.createElement('canvas');
                 artCanvas.width = canvas.width * artScale;
                 artCanvas.height = canvas.height * artScale;
@@ -2993,7 +2993,7 @@
         function saveArtwork() {
             if (!capturedArt) return;
             capturedArt.toBlob(async blob => {
-                const file = new File([blob], (currentArtTitle || 'moonbird-art').replace(/[^a-zA-Z0-9 #]/g, '') + '.png', { type: 'image/png' });
+                const file = new File([blob], (currentArtTitle || 'moonbird-art').replace(/[^a-zA-Z0-9 #]/g, '') + '.jpg', { type: 'image/jpeg' });
                 // Try Web Share API first (iOS saves to camera roll via share sheet)
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
@@ -3010,7 +3010,7 @@
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-            }, 'image/png');
+            }, 'image/jpeg', 0.92);
         }
         
         function drawGameOver() {
