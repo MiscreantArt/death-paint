@@ -1345,11 +1345,7 @@
                 const animationType = this.isMoving ? 'walk' : 'idle';
                 let spriteSheet = sprites.heroSheet;
                 
-                // Chromie active — just a subtle rainbow tint on the existing glow
-                if (rainbowActive) {
-                    ctx.shadowColor = `hsla(${(Date.now() / 8) % 360}, 100%, 70%, 0.6)`;
-                    ctx.shadowBlur = 14;
-                }
+
                 
                 // Squiggle bird override when rainbow tracer active (east-only sheet, force east)
                 let forceEast = false;
