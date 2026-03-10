@@ -3434,8 +3434,6 @@
                 initAudio(); // Init AudioContext on first user gesture (mobile requirement)
                 if (gameState === 'menu') {
                     playSound('menu-tap');
-                    // Start music now (during user gesture) — will play through tutorial
-                    startMusic();
                     // Tutorial every time with skip option
                     startTutorial();
                 } else if (gameState === 'gallery') {
@@ -3492,6 +3490,8 @@
         function startPreroll() {
             gameState = 'preroll';
             prerollStart = Date.now();
+            // Play the chime
+            playSound('player-death');
             prerollGrunt = null;
             prerollExploded = false;
             prerollExplodeTime = 0;
@@ -3680,8 +3680,7 @@
             rainbowActive = false;
             rainbowTimer = 0;
             gameState = 'playing';
-            // Music already started on menu tap — just ensure it's playing
-            if (!bgMusic) startMusic();
+            startMusic();
             score = 0;
             killCount = 0;
             
