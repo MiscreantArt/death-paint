@@ -2837,6 +2837,10 @@
                 ctx.fillStyle = '#2a2a2a';
                 ctx.fillText('paint the canvas', canvas.width / 2, cy);
                 ctx.globalAlpha = 1;
+                
+                // Draw grunt + particles ON TOP of the white bg
+                enemies.forEach(enemy => enemy.draw());
+                particles.forEach(particle => particle.draw());
             }
             
             // SKIP button — top right, always visible (except step 3)
