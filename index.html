@@ -238,12 +238,13 @@
         }
 
         function unlockMusic() {
-            // Call during user gesture to unlock Audio on iOS
+            // Call during user gesture to unlock Audio on iOS — completely silent
             if (!bgMusic) {
                 bgMusic = new Audio('sounds/starshore-save-point.mp3');
                 bgMusic.loop = true;
                 bgMusic.volume = 0;
-                bgMusic.play().then(() => { bgMusic.pause(); bgMusic.currentTime = 0; }).catch(() => {});
+                bgMusic.muted = true;
+                bgMusic.play().then(() => { bgMusic.pause(); bgMusic.currentTime = 0; bgMusic.muted = false; }).catch(() => { if(bgMusic) bgMusic.muted = false; });
             }
         }
         function startMusic() {
@@ -3591,9 +3592,9 @@
         function handleClick() {
             try {
                 initAudio(); // Init AudioContext on first user gesture (mobile requirement)
-                unlockMusic(); // Unlock music Audio on every gesture (iOS needs it)
                 if (gameState === 'menu') {
                     playSound('menu-tap');
+                    unlockMusic(); // Unlock music Audio during menu tap gesture only
                     // Tutorial every time with skip option
                     startTutorial();
                 } else if (gameState === 'gallery') {
