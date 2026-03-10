@@ -568,7 +568,15 @@
             const col = frame % 6;
             const cs = 96;
             try {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 3;
                 ctx.drawImage(spriteSheet, col * cs, row * cs, cs, cs, x - size, y - size, size * 2, size * 2);
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
                 return true;
             } catch(e) {
                 return false;
@@ -1900,6 +1908,22 @@
                 const iconSize = baseSize + sizeBreath;
                 const halfIcon = iconSize / 2;
                 const bounceY = Math.sin(this.bounce) * 6; // gentle float
+                
+                // Glow under power-up (extra strong for chromie)
+                const glowSize = this.type === 'chromie' ? 30 : 20;
+                const glowColor = this.type === 'chromie' ? `hsl(${(Date.now() / 10) % 360}, 100%, 60%)` : (powerUp?.color || '#fff');
+                ctx.shadowBlur = glowSize;
+                ctx.shadowColor = glowColor;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                // Draw glow circle underneath
+                ctx.fillStyle = glowColor;
+                ctx.globalAlpha = this.type === 'chromie' ? 0.5 : 0.3;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y + bounceY, halfIcon * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = this.type === 'chromie' ? 20 : 0;
                 
                 const spriteIcon = sprites.powerUps[this.type];
                 if (spriteIcon && spriteIcon.complete && spriteIcon.naturalWidth > 0) {
