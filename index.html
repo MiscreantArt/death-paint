@@ -3580,8 +3580,9 @@
         }
         
         function spawnTutorialEnemy() {
-            // Spawn from top, slow, gives player time to aim
-            const x = canvas.width * 0.3 + Math.random() * canvas.width * 0.4;
+            // First from top-left, second from top-right
+            const fromLeft = (tutorialKills === 0);
+            const x = fromLeft ? canvas.width * 0.1 : canvas.width * 0.9;
             const enemy = new Enemy(x, -30, true);
             enemy.speed = 0.4;
             enemies.push(enemy);
