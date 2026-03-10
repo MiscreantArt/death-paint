@@ -231,11 +231,11 @@
             // Preload duck quack as AudioBuffer for instant overlapping playback
             if (!soundDefs._quackBuffer && !soundDefs._quackLoading) {
                 soundDefs._quackLoading = true;
-                fetch('sounds/duck-quack.wav?v=2')
+                fetch('sounds/duck-quack.wav?v=3')
                     .then(r => r.arrayBuffer())
                     .then(buf => audioCtx.decodeAudioData(buf))
-                    .then(decoded => { soundDefs._quackBuffer = decoded; })
-                    .catch(() => {});
+                    .then(decoded => { soundDefs._quackBuffer = decoded; console.log('quack buffer loaded'); })
+                    .catch(e => { console.warn('quack buffer failed:', e); soundDefs._quackLoading = false; });
             }
 
         }
@@ -462,13 +462,22 @@
 
             'duck-quack': () => {
                 if (soundDefs._quackBuffer && audioCtx) {
-                    const source = audioCtx.createBufferSource();
-                    source.buffer = soundDefs._quackBuffer;
-                    const gain = audioCtx.createGain();
-                    gain.gain.value = 0.5;
-                    source.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    source.start(0);
+                    try {
+                        const source = audioCtx.createBufferSource();
+                        source.buffer = soundDefs._quackBuffer;
+                        const gain = audioCtx.createGain();
+                        gain.gain.value = 0.5;
+                        source.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        source.start(0);
+                    } catch(e) { console.warn('quack err:', e); }
+                } else {
+                    // Fallback: try Audio element directly
+                    try {
+                        const q = new Audio('sounds/duck-quack.wav?v=3');
+                        q.volume = 0.5;
+                        q.play().catch(() => {});
+                    } catch(e) {}
                 }
                 haptic(15);
             },
