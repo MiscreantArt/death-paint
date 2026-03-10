@@ -2743,19 +2743,20 @@
                 ctx.stroke();
                 
                 // Left text
-                const fontSize = Math.max(28, Math.floor(canvas.width / 10));
-                const subSize = Math.max(16, Math.floor(fontSize * 0.55));
+                const fontSize = Math.max(18, Math.floor(canvas.width / 16));
+                const subSize = Math.max(14, Math.floor(fontSize * 0.6));
                 ctx.textAlign = 'center';
                 
                 ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
                 ctx.fillStyle = '#ffffff';
                 ctx.shadowColor = 'rgba(255,255,255,0.5)';
                 ctx.shadowBlur = 8;
-                ctx.fillText('HOLD + DRAG', halfW / 2, cy - 10);
+                ctx.fillText('HOLD', halfW / 2, cy - fontSize);
+                ctx.fillText('+ DRAG', halfW / 2, cy);
                 ctx.shadowBlur = 0;
                 ctx.font = `${subSize}px 'Courier New', monospace`;
                 ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                ctx.fillText('to move', halfW / 2, cy + subSize + 8);
+                ctx.fillText('to move', halfW / 2, cy + subSize + 12);
                 
             } else if (tutorialStep === 2) {
                 // Step 2: "SHOOT" - right half highlighted, left dimmed  
@@ -2773,19 +2774,20 @@
                 ctx.stroke();
                 
                 // Right text
-                const fontSize = Math.max(28, Math.floor(canvas.width / 10));
-                const subSize = Math.max(16, Math.floor(fontSize * 0.55));
+                const fontSize = Math.max(18, Math.floor(canvas.width / 16));
+                const subSize = Math.max(14, Math.floor(fontSize * 0.6));
                 ctx.textAlign = 'center';
                 
                 ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
                 ctx.fillStyle = '#ffffff';
                 ctx.shadowColor = 'rgba(255,255,255,0.5)';
                 ctx.shadowBlur = 8;
-                ctx.fillText('HOLD RIGHT SIDE', halfW + halfW / 2, cy - 10);
+                ctx.fillText('HOLD', halfW + halfW / 2, cy - fontSize);
+                ctx.fillText('RIGHT SIDE', halfW + halfW / 2, cy);
                 ctx.shadowBlur = 0;
                 ctx.font = `${subSize}px 'Courier New', monospace`;
                 ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 8);
+                ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 12);
                 
             } else if (tutorialStep === 3) {
                 // Step 3: "NOW PAINT" - big centered text
@@ -3233,7 +3235,7 @@
                 }
                 return;
             }
-            if (gameState !== 'playing') {
+            if (gameState !== 'playing' && gameState !== 'tutorial') {
                 // Handle menu/game over clicks
                 if (e.touches.length > 0) {
                     const touch_event = e.touches[0];
