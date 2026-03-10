@@ -1897,9 +1897,10 @@
         let waveQueue = null;
         const WAVE_SIZE = 10;
         // Spawn intervals per wave (ms between enemies)
-        const WAVE_INTERVALS = [1500, 1300, 1100, 900];
+        const WAVE_INTERVALS = [2000, 1600, 1300, 1000];
         let wavePause = 0; // ms timestamp when wave gap started
         const WAVE_GAP = 2500; // 2.5s breather between waves
+        let firstFiveSpawned = 0; // first 5 grunts are solo (one at a time)
         // Wave compositions: [gruntWeight, greenWeight, whiteBossWeight, darkBossWeight]
         // Guaranteed intros + random fill
         // Each wave guarantees a few of the new type, rest is random from the pool
@@ -2064,7 +2065,15 @@
             // === SPAWNING ===
             const currentTime = Date.now();
             
-            if (currentWave <= 4) {
+            if (firstFiveSpawned < 5) {
+                // First 5 grunts: one at a time, wait until killed before next
+                if (enemies.length === 0 && currentTime - lastEnemySpawnTime >= 800) {
+                    const pos = getEdgeSpawnPos();
+                    enemies.push(new Enemy(pos.x, pos.y, false, 'grunt'));
+                    firstFiveSpawned++;
+                    lastEnemySpawnTime = currentTime;
+                }
+            } else if (currentWave <= 4) {
                 // Gap between waves
                 if (wavePause > 0) {
                     if (currentTime - wavePause >= WAVE_GAP) {
@@ -3727,7 +3736,7 @@
             // Initialize stars
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0;
+            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0; firstFiveSpawned = 0;
         }
 
         function startGame() {
@@ -3794,7 +3803,7 @@
             // Initialize stars and reset continuous spawning
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
-            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0;
+            currentWave = 1; waveSpawned = 0; waveQueue = null; wavePause = 0; firstFiveSpawned = 0;
         }
         
         function restartGame() {
