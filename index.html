@@ -1910,21 +1910,18 @@
                 const halfIcon = iconSize / 2;
                 const bounceY = Math.sin(this.bounce) * 6; // gentle float
                 
-                // Glow under power-up (extra strong for chromie)
-                const glowSize = this.type === 'chromie' ? 30 : 20;
+                // Glow under power-up — all items glow so you know to pick them up
                 const glowColor = this.type === 'chromie' ? `hsl(${(Date.now() / 10) % 360}, 100%, 60%)` : (powerUp?.color || '#fff');
-                ctx.shadowBlur = glowSize;
-                ctx.shadowColor = glowColor;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-                // Draw glow circle underneath
                 ctx.fillStyle = glowColor;
-                ctx.globalAlpha = this.type === 'chromie' ? 0.5 : 0.3;
+                ctx.globalAlpha = this.type === 'chromie' ? 0.5 : 0.35;
+                ctx.shadowBlur = this.type === 'chromie' ? 30 : 15;
+                ctx.shadowColor = glowColor;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y + bounceY, halfIcon * 0.7, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y + bounceY, halfIcon * 0.6, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.globalAlpha = 1;
-                ctx.shadowBlur = this.type === 'chromie' ? 20 : 0;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = glowColor;
                 
                 const spriteIcon = sprites.powerUps[this.type];
                 if (spriteIcon && spriteIcon.complete && spriteIcon.naturalWidth > 0) {
