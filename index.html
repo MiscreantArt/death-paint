@@ -2299,12 +2299,13 @@
                                 }
                             }
                             
-                            // Death explosion — skully overrides all, then duck, then normal
+                            // Death explosion — skully overrides all, then normal (duck recolors to yellow)
+                            const isDuckKill = proj.isDuck;
+                            const trailsBefore = fireTrails.length;
+                            const particlesBefore = particles.length;
                             if (playerBuffs.skully > 0) {
                                 spawnSkullySplat(enemy.x, enemy.y);
                                 playerBuffs.skully--;
-                            } else if (proj.isDuck) {
-                                spawnDuckSplat(enemy.x, enemy.y);
                             } else if (enemy.isDarkBoss) {
                                 spawnDarkSplat(enemy.x, enemy.y);
                             } else if (enemy.isBoss) {
@@ -2313,6 +2314,16 @@
                                 spawnGreenSplat(enemy.x, enemy.y);
                             } else {
                                 spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor);
+                            }
+                            // Duck override: recolor all splat to yellow
+                            if (isDuckKill && playerBuffs.skully <= 0) {
+                                const duckYellows = ['#ffdd00', '#ffee33', '#ffcc00', '#fff176', '#ffe082'];
+                                for (let i = trailsBefore; i < fireTrails.length; i++) {
+                                    fireTrails[i].color = duckYellows[Math.floor(Math.random() * duckYellows.length)];
+                                }
+                                for (let i = particlesBefore; i < particles.length; i++) {
+                                    particles[i].color = duckYellows[Math.floor(Math.random() * duckYellows.length)];
+                                }
                             }
                             
                             playSound('enemy-death');
