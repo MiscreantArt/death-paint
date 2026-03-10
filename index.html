@@ -1939,37 +1939,30 @@
                 
                 // Tutorial logic based on current step
                 if (tutorialStep === 1) {
-                    // Step 1: Learn movement - track distance moved
-                    const prevX = player.x;
-                    const prevY = player.y;
-                    
-                    // Track cumulative movement distance
+                    // Step 1: Learn movement — walk around for a while
                     if (leftZone.active && (leftZone.currentDirection.x !== 0 || leftZone.currentDirection.y !== 0)) {
                         const moveDistance = Math.sqrt(leftZone.currentDirection.x * leftZone.currentDirection.x + leftZone.currentDirection.y * leftZone.currentDirection.y);
                         tutorialMoveDist += moveDistance * frameDt * 60;
                         
-                        // Advance to step 2 when player has moved enough
-                        if (tutorialMoveDist >= 100) {
+                        // Need more walking before advancing
+                        if (tutorialMoveDist >= 300) {
                             tutorialStep = 2;
                             tutorialStepStartTime = Date.now();
-                            // Spawn one slow tutorial enemy at top center
-                            const tutorialEnemyPos = { x: canvas.width / 2, y: canvas.height * 0.2 };
-                            tutorialEnemy = new Enemy(tutorialEnemyPos.x, tutorialEnemyPos.y, true); // force grunt
-                            tutorialEnemy.speed = 0.5; // slower speed
+                            // Spawn enemy walking in from the far right edge
+                            tutorialEnemy = new Enemy(canvas.width + 30, canvas.height * 0.35, true);
+                            tutorialEnemy.speed = 0.6;
                             enemies.push(tutorialEnemy);
                         }
                     }
                 } else if (tutorialStep === 2) {
-                    // Step 2: Learn shooting - wait for tutorial enemy to be killed
+                    // Step 2: Learn shooting — enemy walks in from far side, kill it
                     if (enemies.length === 0) {
-                        // Tutorial enemy killed, advance to step 3
                         tutorialStep = 3;
                         tutorialStepStartTime = Date.now();
                     }
                 } else if (tutorialStep === 3) {
-                    // Step 3: "NOW PAINT" transition - wait 1.5 seconds
-                    if (Date.now() - tutorialStepStartTime >= 1500) {
-                        // Tutorial complete - save to localStorage and start real game
+                    // Step 3: "paint the canvas" — elegant transition
+                    if (Date.now() - tutorialStepStartTime >= 2500) {
                         localStorage.setItem('deathpaint-tutorial-done', '1');
                         startGame();
                         return;
@@ -2790,15 +2783,19 @@
                 ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 12);
                 
             } else if (tutorialStep === 3) {
-                // Step 3: "NOW PAINT" - big centered text
+                // Step 3: elegant "paint the canvas" in black
+                const elapsed = (Date.now() - tutorialStepStartTime) / 1000;
+                const fadeIn = Math.min(1, elapsed / 0.8);
+                const fadeOut = elapsed > 1.8 ? Math.max(0, 1 - (elapsed - 1.8) / 0.7) : 1;
+                const alpha = fadeIn * fadeOut;
+                
+                ctx.globalAlpha = alpha;
                 ctx.textAlign = 'center';
-                const fontSize = Math.max(36, Math.floor(canvas.width / 8));
-                ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowColor = 'rgba(255,255,255,0.8)';
-                ctx.shadowBlur = 12;
-                ctx.fillText('NOW PAINT', canvas.width / 2, cy);
-                ctx.shadowBlur = 0;
+                const fontSize = Math.max(22, Math.floor(canvas.width / 12));
+                ctx.font = `italic ${fontSize}px Georgia, serif`;
+                ctx.fillStyle = '#2a2a2a';
+                ctx.fillText('paint the canvas', canvas.width / 2, cy);
+                ctx.globalAlpha = 1;
             }
             
             ctx.restore();
