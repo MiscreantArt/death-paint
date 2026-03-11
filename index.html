@@ -1762,7 +1762,7 @@
                 
                 // Knockback from projectile — red minions bounce back hard
                 if (projectileAngle !== null) {
-                    const knockbackForce = this.isRedMinion ? 25 : 8;
+                    const knockbackForce = this.isRedMinion ? 15 : 8;
                     this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
                     this.knockbackY = Math.sin(projectileAngle) * knockbackForce;
                 }
