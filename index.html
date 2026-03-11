@@ -2614,6 +2614,12 @@
                                     }
                                 });
                                 enemies = enemies.filter(e => e.health > 0);
+                                
+                                // Drop halo if player doesn't have one
+                                if (!hasHalo) {
+                                    powerUps.push(new PowerUp(enemy.x, enemy.y, 'halo'));
+                                    playSound('powerup-spawn');
+                                }
                             }
                             
                             // Death explosion — skully overrides all, then normal (duck recolors to yellow)
@@ -2657,8 +2663,6 @@
                             const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || rainbowActive;
                             if (!anyBuffActive && currentWave > 1 && gameTime > 10 && Math.random() < 0.08) {
                                 const dropTypes = ['duck', 'skully', 'chromie'];
-                                // Halo can only drop if player doesn't have one already
-                                if (!hasHalo) dropTypes.push('halo');
                                 const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
