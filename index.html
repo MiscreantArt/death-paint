@@ -1692,8 +1692,8 @@
                 }
                 
                 // Red Minion charging behavior
-                // Red Minion fuse countdown — explodes after 4 seconds regardless
-                if (this.isRedMinion) {
+                // Red Minion fuse countdown — explodes after 4 seconds regardless (not when frozen for death sequence)
+                if (this.isRedMinion && !this.frozen) {
                     this.fuseTimer -= frameDt * 60;
                     if (this.fuseTimer <= 0) {
                         // EXPLODE — red paint bomb + shrapnel particles
