@@ -2407,16 +2407,20 @@
                     }
                 }
             } else if (!redKingDefeated && !redKingPhase) {
-                // Check if all enemies are dead after wave 4 to spawn Red King
+                // Wait for all enemies to die after wave 4, then pause before Red King
                 if (enemies.length === 0) {
-                    redKingPhase = true;
-                    redKingSpawnTime = currentTime;
-                    // Spawn Red King from random edge
-                    const pos = getEdgeSpawnPos();
-                    enemies.push(new Enemy(pos.x, pos.y, false, 'redKing'));
-                    lastEnemySpawnTime = currentTime;
-                    // Deep bass tone entrance
-                    playSound('red-king-enter');
+                    if (!redKingPauseTime) {
+                        // Start the pause timer
+                        redKingPauseTime = currentTime;
+                    } else if (currentTime - redKingPauseTime >= 3000) {
+                        // 3 second breather, then spawn
+                        redKingPhase = true;
+                        redKingSpawnTime = currentTime;
+                        const pos = getEdgeSpawnPos();
+                        enemies.push(new Enemy(pos.x, pos.y, false, 'redKing'));
+                        lastEnemySpawnTime = currentTime;
+                        playSound('red-king-enter');
+                    }
                 }
             } else if (redKingPhase) {
                 // Red King phase — trickle red minions after 3s to keep pressure on
