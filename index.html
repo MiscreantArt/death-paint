@@ -2864,15 +2864,6 @@
                     screenShake = 0;
                     stopMusic();
                     playSound('player-death');
-                } else {
-                    // NORMAL DEATH
-                    gameState = 'dying';
-                    dyingStartTime = Date.now();
-                    dyingEnemiesExploded = false;
-                    dyingDriftPixels = [];
-                    screenShake = 0;
-                    stopMusic();
-                    playSound('player-death');
                 
                     // Call death explosion function
                     triggerDeathExplosion();
@@ -2947,6 +2938,7 @@
                     gameOverTime = Date.now();
                     playSound('game-over');
                 }, totalDeathTime);
+                }
             }
 
         function captureArt() {
