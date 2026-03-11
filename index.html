@@ -586,6 +586,28 @@
                 synthTone(150, 0.08, 0.08, 'sine', 60);
                 haptic(10);
             },
+            'red-king-enter': () => {
+                // Ominous deep rumble — the Red King arrives
+                synthTone(55, 1.5, 0.2, 'sawtooth', 30);
+                synthTone(80, 1.2, 0.15, 'sine');
+                synthNoise(0.8, 0.06, 200);
+                haptic([50, 30, 50, 30, 80]);
+            },
+            'red-king-death': () => {
+                // Triumphant rising chord — the King falls
+                synthTone(220, 0.8, 0.15, 'sine');
+                scheduleTone(330, 0.7, 0.12, 'sine', 150);
+                scheduleTone(440, 0.6, 0.12, 'sine', 300);
+                scheduleTone(550, 0.5, 0.1, 'sine', 450);
+                scheduleTone(660, 0.8, 0.15, 'sine', 600);
+                haptic([40, 20, 40, 20, 60, 30, 80]);
+            },
+            'red-minion-explode': () => {
+                // Short sharp boom
+                synthNoise(0.15, 0.2, 300);
+                synthTone(100, 0.2, 0.15, 'square', 40);
+                haptic([30, 20, 50]);
+            },
 
         };
 
@@ -1652,7 +1674,7 @@
                     // Update facing direction toward player
                     this.currentDirection = this.getCardinalDirection(dx, dy);
                     
-                    // Drop permanent color pixels — builds up like Jackson Pollock (not for bosses)
+                    // Drop permanent color pixels — builds up like Jackson Pollock (not for bosses, except Red King)
                     // Reduced: 1 pixel every 4 frames to prevent canvas saturation
                     if (!this.isBoss && Math.random() < 0.25 * frameDt * 60) {
                         fireTrails.push(new FireTrail(
@@ -1660,6 +1682,19 @@
                             this.y + (Math.random() - 0.5) * 20,
                             this.favoriteColor
                         ));
+                    }
+                    // Red King leaves thick red trail
+                    if (this.isRedKing && Math.random() < 0.5 * frameDt * 60) {
+                        const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444'];
+                        for (let i = 0; i < 2; i++) {
+                            const t = new FireTrail(
+                                this.x + (Math.random() - 0.5) * 40,
+                                this.y + (Math.random() - 0.5) * 30
+                            );
+                            t.size = 1.5 + Math.random() * 2;
+                            t.color = redColors[Math.floor(Math.random() * redColors.length)];
+                            fireTrails.push(t);
+                        }
                     }
                     
 
@@ -1680,7 +1715,7 @@
                         spawnRedSplat(this.x, this.y);
                         player.health -= 1;
                         screenShake = 5;
-                        playSound('enemy-death');
+                        playSound('red-minion-explode');
                         // Mark for removal
                         this.health = 0;
                         this.exploded = true;
@@ -2144,6 +2179,7 @@
         let redKingPhase = false;
         let redKingDefeated = false;
         let redKingPauseTime = 0;
+        let redKingSpawnTime = 0;
         // Wave definitions — each wave is an array of "bursts"
         // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
         const WAVE_DEFS = [
@@ -2386,17 +2422,22 @@
                 // Check if all enemies are dead after wave 4 to spawn Red King
                 if (enemies.length === 0) {
                     redKingPhase = true;
-                    // Screen dimming and bass tone are handled in render loop
+                    redKingSpawnTime = currentTime;
                     // Spawn Red King from random edge
                     const pos = getEdgeSpawnPos();
                     enemies.push(new Enemy(pos.x, pos.y, false, 'redKing'));
                     lastEnemySpawnTime = currentTime;
-                    // Play deep bass tone
-                    synthTone(80, 800);
+                    // Deep bass tone entrance
+                    playSound('red-king-enter');
                 }
             } else if (redKingPhase) {
-                // Red King phase - don't spawn anything, just wait for king to die
-                // The death handler will set redKingDefeated = true and redKingPhase = false
+                // Red King phase — trickle red minions after 5s to keep pressure on
+                const kingAliveTime = (currentTime - (redKingSpawnTime || currentTime)) / 1000;
+                if (kingAliveTime > 5 && currentTime - lastEnemySpawnTime >= 3500 && enemies.length < 6) {
+                    const pos = getEdgeSpawnPos();
+                    enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
+                    lastEnemySpawnTime = currentTime;
+                }
             } else if (redKingDefeated) {
                 // Free-for-all: steady ramp (after Red King defeat pause)
                 if (Date.now() - redKingPauseTime < 1500) return; // 1.5s pause
@@ -2512,10 +2553,7 @@
                                 redKingDefeated = true;
                                 redKingPauseTime = Date.now();
                                 screenShake = 10;
-                                // Play triumph sound (rising synth chord)
-                                synthTone(220, 100);
-                                setTimeout(() => synthTone(277, 100), 100);
-                                setTimeout(() => synthTone(330, 100), 200);
+                                playSound('red-king-death');
                             } else if (enemy.isRedMinion) {
                                 spawnRedSplat(enemy.x, enemy.y);
                             } else if (enemy.isDarkBoss) {
@@ -4068,7 +4106,7 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
-            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0;
+            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
         }
 
         function startGame() {
@@ -4136,7 +4174,7 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
-            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0;
+            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
         }
         
         function restartGame() {
