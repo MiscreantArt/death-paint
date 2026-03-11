@@ -1683,19 +1683,7 @@
                             this.favoriteColor
                         ));
                     }
-                    // Red King leaves thick red trail
-                    if (this.isRedKing && Math.random() < 0.5 * frameDt * 60) {
-                        const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444'];
-                        for (let i = 0; i < 2; i++) {
-                            const t = new FireTrail(
-                                this.x + (Math.random() - 0.5) * 40,
-                                this.y + (Math.random() - 0.5) * 30
-                            );
-                            t.size = 1.5 + Math.random() * 2;
-                            t.color = redColors[Math.floor(Math.random() * redColors.length)];
-                            fireTrails.push(t);
-                        }
-                    }
+
                     
 
                 }
