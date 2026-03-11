@@ -219,11 +219,20 @@
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                watchAudioState();
             }
-            // iOS/Safari: AudioContext starts suspended, must resume in user gesture
-            if (audioCtx.state === 'suspended') {
+            // iOS/Safari: AudioContext can be suspended OR interrupted (iOS background)
+            if (audioCtx.state !== 'running') {
                 audioCtx.resume();
             }
+            // Warm up: play silent buffer to keep context alive (iOS trick)
+            try {
+                const silentBuf = audioCtx.createBuffer(1, 1, 22050);
+                const silentSrc = audioCtx.createBufferSource();
+                silentSrc.buffer = silentBuf;
+                silentSrc.connect(audioCtx.destination);
+                silentSrc.start(0);
+            } catch(e) {}
             // Preload WAV files as AudioBuffers — works reliably on all platforms
             function preloadBuffer(url, key) {
                 if (soundDefs[key] || soundDefs[key + '_loading']) return;
@@ -258,7 +267,7 @@
             if (_musicRetryInterval) { clearInterval(_musicRetryInterval); _musicRetryInterval = null; }
             if (!audioCtx) return;
             // Re-resume AudioContext in case iOS suspended it during tutorial
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (audioCtx.state !== 'running') audioCtx.resume();
             if (!bgMusicBuffer) {
                 // Buffer still loading — retry every 500ms until it's ready
                 _musicRetryInterval = setInterval(() => {
@@ -582,7 +591,7 @@
 
         function playSound(name) {
             if (!audioCtx) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (audioCtx.state !== 'running') audioCtx.resume();
             const now = performance.now();
             if (throttleMs[name]) {
                 if (soundThrottles[name] && now - soundThrottles[name] < throttleMs[name]) return;
@@ -4021,15 +4030,34 @@
         }
         
         // Pause/resume when leaving/returning to app
+        let _musicWasPlaying = false;
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                _musicWasPlaying = !!(bgMusic && bgMusic.source);
                 pauseMusic();
-                if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+                // Don't suspend audioCtx — iOS will set it to 'interrupted' on its own
             } else {
-                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-                if (bgMusic && gameState === 'playing') resumeMusic();
+                // Resume audioCtx from suspended/interrupted
+                if (audioCtx && audioCtx.state !== 'running') {
+                    audioCtx.resume().then(() => {
+                        if (_musicWasPlaying && gameState === 'playing') resumeMusic();
+                    });
+                } else {
+                    if (_musicWasPlaying && gameState === 'playing') resumeMusic();
+                }
             }
         });
+        
+        // Listen for AudioContext state changes (iOS 'interrupted' state)
+        function watchAudioState() {
+            if (!audioCtx) return;
+            audioCtx.onstatechange = () => {
+                if (audioCtx.state === 'running' && _musicWasPlaying && gameState === 'playing') {
+                    resumeMusic();
+                    _musicWasPlaying = false;
+                }
+            };
+        }
         
         init();
     </script>
