@@ -1578,10 +1578,10 @@
                     this.isBoss = true;
                     this.isDarkBoss = false;
                 } else if (forceType === 'redKing') {
-                    // Red King Boss — biggest, tankiest, but not slow
+                    // Red King Boss — biggest, tankiest, aggressive
                     this.spriteId = 2950;
                     this.health = 40;
-                    this.speed = 0.9;
+                    this.speed = 1.3;
                     this.tier = 4;
                     this.size = 80; // Biggest enemy in game
                     this.isBoss = true;
@@ -2531,21 +2531,24 @@
                                 }
                             }
                             
+                            // Red King death — ALWAYS trigger regardless of active power-up
+                            if (enemy.isRedKing) {
+                                redKingPhase = false;
+                                redKingDefeated = true;
+                                redKingPauseTime = Date.now();
+                                screenShake = 10;
+                                playSound('red-king-death');
+                            }
+                            
                             // Death explosion — skully overrides all, then normal (duck recolors to yellow)
                             const isDuckKill = proj.isDuck;
                             const trailsBefore = fireTrails.length;
                             const particlesBefore = particles.length;
                             if (playerBuffs.skully > 0) {
                                 spawnSkullySplat(enemy.x, enemy.y);
-                                playerBuffs.skully--;
+                                if (!enemy.isRedKing) playerBuffs.skully--;
                             } else if (enemy.isRedKing) {
                                 spawnRedSplat(enemy.x, enemy.y);
-                                // Red King death - end phase and start free-for-all
-                                redKingPhase = false;
-                                redKingDefeated = true;
-                                redKingPauseTime = Date.now();
-                                screenShake = 10;
-                                playSound('red-king-death');
                             } else if (enemy.isRedMinion) {
                                 spawnPixelDeath(enemy.x, enemy.y, '#cc0000');
                             } else if (enemy.isDarkBoss) {
