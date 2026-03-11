@@ -1578,10 +1578,10 @@
                     this.isBoss = true;
                     this.isDarkBoss = false;
                 } else if (forceType === 'redKing') {
-                    // Red King Boss — biggest, slowest, tankiest
+                    // Red King Boss — biggest, tankiest, but not slow
                     this.spriteId = 2950;
-                    this.health = 25;
-                    this.speed = 0.5;
+                    this.health = 40;
+                    this.speed = 0.9;
                     this.tier = 4;
                     this.size = 80; // Biggest enemy in game
                     this.isBoss = true;
@@ -1711,8 +1711,8 @@
                 if (this.charging) {
                     this.chargeTimer--;
                     if (this.chargeTimer <= 0) {
-                        // EXPLODE
-                        spawnRedSplat(this.x, this.y);
+                        // EXPLODE — grunt-sized red splat
+                        spawnPixelDeath(this.x, this.y, '#cc0000');
                         player.health -= 1;
                         screenShake = 5;
                         playSound('red-minion-explode');
@@ -2431,9 +2431,9 @@
                     playSound('red-king-enter');
                 }
             } else if (redKingPhase) {
-                // Red King phase — trickle red minions after 5s to keep pressure on
+                // Red King phase — trickle red minions after 3s to keep pressure on
                 const kingAliveTime = (currentTime - (redKingSpawnTime || currentTime)) / 1000;
-                if (kingAliveTime > 5 && currentTime - lastEnemySpawnTime >= 3500 && enemies.length < 6) {
+                if (kingAliveTime > 3 && currentTime - lastEnemySpawnTime >= 2500 && enemies.length < 8) {
                     const pos = getEdgeSpawnPos();
                     enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
                     lastEnemySpawnTime = currentTime;
@@ -2555,7 +2555,7 @@
                                 screenShake = 10;
                                 playSound('red-king-death');
                             } else if (enemy.isRedMinion) {
-                                spawnRedSplat(enemy.x, enemy.y);
+                                spawnPixelDeath(enemy.x, enemy.y, '#cc0000');
                             } else if (enemy.isDarkBoss) {
                                 spawnDarkSplat(enemy.x, enemy.y);
                             } else if (enemy.isBoss) {
@@ -2761,7 +2761,7 @@
                             setTimeout(() => synthTone(277, 100), 100);
                             setTimeout(() => synthTone(330, 100), 200);
                         } else if (enemy.isRedMinion) {
-                            spawnRedSplat(enemy.x, enemy.y);
+                            spawnPixelDeath(enemy.x, enemy.y, '#cc0000');
                         } else if (enemy.isDarkBoss) {
                             spawnDarkSplat(enemy.x, enemy.y);
                         } else if (enemy.isBoss) {
