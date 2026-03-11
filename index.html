@@ -1603,7 +1603,7 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isRedMinion = true;
-                    this.fuseTimer = 240; // 4 seconds at 60fps
+                    this.fuseTimer = 180; // 3 seconds at 60fps
                     this.knockbackResist = 0.15; // low resist = bounces a lot
                 } else {
                     // Dark purple bosses — BIG, splatter mostly black/psychedelic
@@ -1700,11 +1700,11 @@
                         // White flash circle that fades
                         particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,100,50,0.9)', 8, 2.5));
                         particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,255,255,0.8)', 6, 2));
-                        // Red paint splat on canvas
+                        // Red paint splat on canvas — tighter spread
                         const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444'];
-                        for (let i = 0; i < 60; i++) {
+                        for (let i = 0; i < 40; i++) {
                             const angle = Math.random() * Math.PI * 2;
-                            const dist = Math.random() * 50;
+                            const dist = Math.random() * 30;
                             const t = new FireTrail(this.x + Math.cos(angle) * dist, this.y + Math.sin(angle) * dist);
                             t.size = 1.5 + Math.random() * 2;
                             t.color = redColors[Math.floor(Math.random() * redColors.length)];
@@ -1810,13 +1810,7 @@
                     ctx.filter = 'brightness(3)';
                 }
                 
-                // Red Minion — blink on/off as fuse runs out (last 1.5 seconds)
-                if (this.isRedMinion && this.fuseTimer < 90) {
-                    const flashRate = this.fuseTimer < 30 ? 3 : 6;
-                    if (Math.floor(this.fuseTimer / flashRate) % 2 === 0) {
-                        this._blinkHidden = true;
-                    }
-                }
+
                 
                 // Draw sprite (skip if blink-hidden)
                 if (!this._blinkHidden) {
