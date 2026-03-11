@@ -89,6 +89,13 @@
         let paintRainTimer = 0;
         let gamePaused = false;
         
+        // Halo power-up variables
+        let hasHalo = false;  // Player has a stored halo (extra life)
+        let haloReviving = false;  // Currently in halo revive animation
+        let haloReviveTime = 0;
+        let haloHeroY = 0;  // Y position of descending halo hero
+        let haloFlashTimer = 0;
+        
         // Tutorial state
         let tutorialStep = 0;
         let tutorialMoveDist = 0;
@@ -674,13 +681,15 @@
         const powerUpTypes = [
             { type: 'chromie', birdId: 12, color: '#ff00ff', duration: 0 },    // Rainbow trail + shockwave sound
             { type: 'duck', birdId: 5568, color: '#ffdd00', duration: 5, killBased: true },    // Duck — 5 kills
-            { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 }  // Death touch - melee kills, but vulnerable to shots
+            { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 },  // Death touch - melee kills, but vulnerable to shots
+            { type: 'halo', birdId: 6295, color: '#ffd700', duration: 0 }  // Extra life
         ];
         
         // Player buffs
         let playerBuffs = {
             duck: 0,     // Cosmetic duck noises
-            skully: 0    // Next N kills explode black
+            skully: 0,   // Next N kills explode black
+            halo: false  // Player has a stored halo (extra life)
         };
         
         // Sprite loading - updated for sprite sheets
@@ -703,7 +712,7 @@
             allLoads.push(new Promise(r => { sprites.heroSheet.onload = r; sprites.heroSheet.onerror = r; }));
             
             // ALL enemy sheets — wait for them
-            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164];
+            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164, 6295];
             enemyIds.forEach(id => {
                 const img = new Image();
                 img.src = `sheets/${id}.png`;
@@ -717,12 +726,17 @@
             sprites.squiggleSheet.src = 'sheets/12.png';
             allLoads.push(new Promise(r => { sprites.squiggleSheet.onload = r; sprites.squiggleSheet.onerror = r; }));
             
+            // Halo hero sprite sheet
+            sprites.haloSheet = new Image();
+            sprites.haloSheet.src = 'sheets/6295.png';
+            allLoads.push(new Promise(r => { sprites.haloSheet.onload = r; sprites.haloSheet.onerror = r; }));
+            
             sprites.chromieIcon = new Image();
             sprites.chromieIcon.src = 'assets/powerup-chromie.png';
             allLoads.push(new Promise(r => { sprites.chromieIcon.onload = r; sprites.chromieIcon.onerror = r; }));
             
             // Power-up icons
-            [sprites.powerUps.duck, sprites.powerUps.chromie, sprites.powerUps.skully].forEach(img => {
+            [sprites.powerUps.duck, sprites.powerUps.chromie, sprites.powerUps.skully, sprites.powerUps.halo].forEach(img => {
                 if (img && img.src) allLoads.push(new Promise(r => { img.onload = r; img.onerror = r; }));
             });
             
@@ -769,6 +783,8 @@
         sprites.powerUps.chromie.src = 'assets/powerup-chromie.png';
         sprites.powerUps.skully = new Image();
         sprites.powerUps.skully.src = 'assets/powerup-skully.png';
+        sprites.powerUps.halo = new Image();
+        sprites.powerUps.halo.src = 'assets/powerup-halo.png';
         
         // Directional duck projectile images
         const duckProjectileSprites = {
@@ -1471,15 +1487,18 @@
                 
                 // Draw sprite using sprite sheets
                 // Determine which sprite sheet to use based on active power-ups
-                // Priority: skully > duck (most visually distinctive first)
+                // Priority: halo flash > skully > duck (most visually distinctive first)
                 const animationType = this.isMoving ? 'walk' : 'idle';
                 let spriteSheet = sprites.heroSheet;
-                
+                let forceEast = false;
 
                 
+                // Halo flash override (highest priority)
+                if (haloFlashTimer > 0 && sprites.haloSheet && sprites.haloSheet.complete) {
+                    spriteSheet = sprites.haloSheet;
+                }
                 // Squiggle bird override when rainbow tracer active (east-only sheet, force east)
-                let forceEast = false;
-                if (rainbowActive && sprites.squiggleSheet && sprites.squiggleSheet.complete) {
+                else if (rainbowActive && sprites.squiggleSheet && sprites.squiggleSheet.complete) {
                     spriteSheet = sprites.squiggleSheet;
                     forceEast = true;
                 } else if (playerBuffs.skully > 0 && sprites.powerUpBirdSheets.skully && sprites.powerUpBirdSheets.skully.complete) {
@@ -2038,11 +2057,13 @@
                 // Lazy-load the power-up bird sprite sheet for hero swap
                 loadPowerUpBird(this.type);
                 
-                // Clear any active power-up before applying new one
-                playerBuffs.duck = 0;
-                playerBuffs.skully = 0;
-                rainbowActive = false;
-                rainbowTimer = 0;
+                // Clear any active power-up before applying new one (except for halo)
+                if (this.type !== 'halo') {
+                    playerBuffs.duck = 0;
+                    playerBuffs.skully = 0;
+                    rainbowActive = false;
+                    rainbowTimer = 0;
+                }
                 
                 switch (this.type) {
                     case 'chromie':
@@ -2064,6 +2085,14 @@
                         playSound('skully-activate');
                         haptic([30, 15, 30]);
                         playerBuffs.skully = 5; // Kill count, not time
+                        break;
+                    case 'halo':
+                        // Extra life — store it, don't use immediately
+                        playSound('chromie-shockwave');  // reuse the big sound
+                        haptic([20, 10, 20, 10, 30, 20, 40]);
+                        hasHalo = true;
+                        // Brief flash as halo hero (swap sprite for 30 frames)
+                        haloFlashTimer = 30;
                         break;
                 }
                 
@@ -2282,6 +2311,29 @@
                 return;
             }
             
+            if (gameState === 'haloRevive') {
+                const elapsed = Date.now() - haloReviveTime;
+                // Halo hero floats down from top to player position over 1.5 seconds
+                const targetY = canvas.height / 2;
+                haloHeroY = -60 + (targetY + 60) * Math.min(1, elapsed / 1500);
+                
+                if (elapsed > 1500 && elapsed < 2000) {
+                    // Flash/transform phase — at player position
+                    haloFlashTimer = 30;  // Will cause sprite swap in draw
+                }
+                
+                if (elapsed > 2500) {
+                    // Resume game
+                    gameState = 'playing';
+                    haloReviving = false;
+                    player.health = 3;  // Restore health
+                    player.x = canvas.width / 2;
+                    player.y = canvas.height / 2;
+                    startMusic();  // Resume music
+                }
+                return;
+            }
+            
             // Tutorial state handling
             if (gameState === 'tutorial') {
                 // Update player (movement always allowed)
@@ -2486,6 +2538,9 @@
                 if (rainbowTimer <= 0) rainbowActive = false;
             }
             
+            // Halo flash timer update
+            if (haloFlashTimer > 0) haloFlashTimer -= frameDt * 60;
+            
             // No player trail during duck mode — trail comes from the projectiles instead
             
             const now = Date.now();
@@ -2550,6 +2605,15 @@
                                 redKingPauseTime = Date.now();
                                 screenShake = 10;
                                 playSound('red-king-death');
+                                
+                                // Pop all red minions when King dies
+                                enemies.forEach(e => {
+                                    if (e.isRedMinion) {
+                                        spawnPixelDeath(e.x, e.y, '#cc0000');
+                                        e.health = 0;
+                                    }
+                                });
+                                enemies = enemies.filter(e => e.health > 0);
                             }
                             
                             // Death explosion — skully overrides all, then normal (duck recolors to yellow)
@@ -2593,7 +2657,9 @@
                             const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || rainbowActive;
                             if (!anyBuffActive && currentWave > 1 && gameTime > 10 && Math.random() < 0.08) {
                                 const dropTypes = ['duck', 'skully', 'chromie'];
-                                const dropType = dropTypes[Math.floor(Math.random() * 3)];
+                                // Halo can only drop if player doesn't have one already
+                                if (!hasHalo) dropTypes.push('halo');
+                                const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
                             }
@@ -2633,16 +2699,8 @@
                 }
             });
             
-            // Check death — trigger the death sequence
-            if (player.health <= 0 && gameState === 'playing') {
-                gameState = 'dying';
-                dyingStartTime = Date.now();
-                dyingEnemiesExploded = false;
-                dyingDriftPixels = [];
-                screenShake = 0;
-                stopMusic();
-                playSound('player-death');
-                
+            // Extract death explosion into function to avoid duplication
+            function triggerDeathExplosion() {
                 // === GRAND DEATH EXPLOSION — the final artwork ===
                 // All 15 colors get their moment — concentric rings of variety
                 const deathColors = [...pixelColors];
@@ -2723,10 +2781,99 @@
                         shifting: false
                     });
                 }
+            }
+            
+            // Check death — trigger the death sequence
+            if (player.health <= 0 && gameState === 'playing') {
+                if (hasHalo) {
+                    // HALO REVIVE — play full death + fireworks, then revive
+                    hasHalo = false;
+                    gameState = 'dying';
+                    dyingStartTime = Date.now();
+                    dyingEnemiesExploded = false;
+                    dyingDriftPixels = [];
+                    screenShake = 0;
+                    stopMusic();
+                    playSound('player-death');
+                    
+                    // Same death explosion as normal
+                    triggerDeathExplosion();
+                    
+                    // Mark all enemies as frozen for fireworks
+                    enemies.forEach(e => { e.frozen = true; e.deathFlash = 0; });
+                    soundDefs._fwNote = 0;
+                    
+                    // Stagger firework pops (same as normal death)
+                    const fireworkDelay = 400;
+                    const fireworkInterval = Math.min(200, 2000 / Math.max(enemies.length, 1));
+                    
+                    enemies.forEach((enemy, idx) => {
+                        setTimeout(() => {
+                            if (gameState !== 'dying') return;
+                            enemy.deathFlash = 1;
+                        }, fireworkDelay + idx * fireworkInterval - 100);
+                        
+                        setTimeout(() => {
+                            if (gameState !== 'dying') return;
+                            haptic(15);
+                            screenShake = Math.max(screenShake, enemy.isBoss ? 6 : 3);
+                            // Same splat logic as normal death
+                            if (enemy.isRedKing) {
+                                spawnRedSplat(enemy.x, enemy.y);
+                                redKingPhase = false;
+                                redKingDefeated = true;
+                                redKingPauseTime = Date.now();
+                                screenShake = 10;
+                            } else if (enemy.isRedMinion) {
+                                spawnPixelDeath(enemy.x, enemy.y, '#cc0000');
+                            } else if (enemy.isDarkBoss) {
+                                spawnDarkSplat(enemy.x, enemy.y);
+                            } else if (enemy.isBoss) {
+                                spawnWhitePaintBomb(enemy.x, enemy.y);
+                            } else {
+                                spawnPixelDeath(enemy.x, enemy.y, enemy.favoriteColor || '#ff4400');
+                            }
+                            playSound('enemy-death');
+                            const eIdx = enemies.indexOf(enemy);
+                            if (eIdx >= 0) enemies.splice(eIdx, 1);
+                        }, fireworkDelay + idx * fireworkInterval);
+                    });
+                    
+                    // After fireworks: HALO REVIVE instead of game over
+                    const totalFireworkTime = fireworkDelay + enemies.length * fireworkInterval + 600;
+                    const totalDeathTime = Math.max(totalFireworkTime, 2700);
+                    setTimeout(() => {
+                        if (gameState !== 'dying') return;
+                        enemies = [];
+                        haloReviving = true;
+                        haloReviveTime = Date.now();
+                        haloHeroY = -60;  // Start above screen
+                        gameState = 'haloRevive';
+                    }, totalDeathTime);
+                    
+                } else {
+                    // NORMAL DEATH
+                    gameState = 'dying';
+                    dyingStartTime = Date.now();
+                    dyingEnemiesExploded = false;
+                    dyingDriftPixels = [];
+                    screenShake = 0;
+                    stopMusic();
+                    playSound('player-death');
+                } else {
+                    // NORMAL DEATH
+                    gameState = 'dying';
+                    dyingStartTime = Date.now();
+                    dyingEnemiesExploded = false;
+                    dyingDriftPixels = [];
+                    screenShake = 0;
+                    stopMusic();
+                    playSound('player-death');
                 
-
-                
-                // === FIREWORKS — enemies freeze, then pop one by one from nearest to farthest ===
+                    // Call death explosion function
+                    triggerDeathExplosion();
+                    
+                    // === FIREWORKS — enemies freeze, then pop one by one from nearest to farthest ===
                 // Sort by distance from player (closest first)
                 enemies.sort((a, b) => {
                     const da = (a.x - player.x) ** 2 + (a.y - player.y) ** 2;
@@ -3052,6 +3199,29 @@
                     ctx.fillStyle = p.color;
                     ctx.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
                 });
+            } else if (gameState === 'haloRevive') {
+                // Keep showing the paint canvas (background)
+                if (paintCanvas) ctx.drawImage(paintCanvas, 0, 0);
+                fireTrails.forEach(trail => trail.draw());
+                
+                const elapsed = Date.now() - haloReviveTime;
+                
+                // Draw the halo hero sprite floating down
+                if (elapsed <= 1500) {
+                    // Floating down phase
+                    if (sprites.haloSheet && sprites.haloSheet.complete) {
+                        if (!drawSprite(sprites.haloSheet, 'south', 'idle', Math.floor(elapsed / 100) % 4, canvas.width/2, haloHeroY, player.size)) {
+                            // Fallback circle
+                            ctx.fillStyle = '#ffd700';
+                            ctx.beginPath();
+                            ctx.arc(canvas.width/2, haloHeroY, player.size * 0.8, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                } else {
+                    // After transform - draw normal hero (halo flash timer will handle sprite selection)
+                    player.draw();
+                }
             } else if (gameState === 'gallery') {
                 drawHangMode();
             } else if (gameState === 'gameOver') {
@@ -3620,6 +3790,19 @@
             ctx.fillStyle = '#4a3520';
             ctx.fillText('hang art', hangX + hangW/2, btnY2 + 20);
             
+            // Halo icon if player has one
+            if (hasHalo) {
+                const haloIcon = sprites.powerUps.halo;
+                if (haloIcon && haloIcon.complete) {
+                    const iconSize = 24;
+                    const iconX = hangX + hangW + 8;
+                    const iconY = btnY2 + (btnH - iconSize) / 2;
+                    ctx.globalAlpha = 0.9;
+                    ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
+                    ctx.globalAlpha = 1;
+                }
+            }
+            
             // No end button — hang IS the end
             endBtnRect = null;
             
@@ -4114,6 +4297,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
+            hasHalo = false; haloReviving = false; haloFlashTimer = 0;
         }
 
         function startGame() {
@@ -4182,6 +4366,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
+            hasHalo = false; haloReviving = false; haloFlashTimer = 0;
         }
         
         function restartGame() {
