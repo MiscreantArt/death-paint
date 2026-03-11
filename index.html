@@ -678,7 +678,7 @@
             allLoads.push(new Promise(r => { sprites.heroSheet.onload = r; sprites.heroSheet.onerror = r; }));
             
             // ALL enemy sheets — wait for them
-            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089];
+            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164];
             enemyIds.forEach(id => {
                 const img = new Image();
                 img.src = `sheets/${id}.png`;
@@ -1009,6 +1009,50 @@
                 const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
                 t.size = 1 + Math.random() * 2;
                 t.color = darkPsychColors[Math.floor(Math.random() * darkPsychColors.length)];
+                fireTrails.push(t);
+            }
+        }
+
+        function spawnRedSplat(x, y) {
+            // Red paint explosion - similar to spawnDarkSplat but with red colors
+            const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444', '#660000'];
+            
+            // Burst particles
+            for (let i = 0; i < 150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 5 + Math.random() * 18;
+                const c = redColors[Math.floor(Math.random() * redColors.length)];
+                particles.push(new Particle(
+                    x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6,
+                    Math.cos(angle) * speed, Math.sin(angle) * speed,
+                    c, 15 + Math.floor(Math.random() * 20), 0.5 + Math.random() * 1.2
+                ));
+            }
+            // Red core - similar size to dark boss
+            for (let i = 0; i < 400; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 120;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 3.5 + Math.random() * 4;
+                t.color = redColors[Math.floor(Math.random() * redColors.length)];
+                fireTrails.push(t);
+            }
+            // Medium ring
+            for (let i = 0; i < 300; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 90 + Math.random() * 180;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 2 + Math.random() * 2.5;
+                t.color = redColors[Math.floor(Math.random() * redColors.length)];
+                fireTrails.push(t);
+            }
+            // Outer fling
+            for (let i = 0; i < 150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 210 + Math.random() * 270;
+                const t = new FireTrail(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                t.size = 1 + Math.random() * 2;
+                t.color = redColors[Math.floor(Math.random() * redColors.length)];
                 fireTrails.push(t);
             }
         }
@@ -1464,6 +1508,10 @@
                     gruntChance = 0; greenChance = 0; whiteBossChance = 1;
                 } else if (forceType === 'darkBoss') {
                     gruntChance = 0; greenChance = 0; whiteBossChance = 0;
+                } else if (forceType === 'redKing') {
+                    gruntChance = 0; greenChance = 0; whiteBossChance = 0;
+                } else if (forceType === 'redMinion') {
+                    gruntChance = 0; greenChance = 0; whiteBossChance = 0;
                 } else if (forceGrunt) {
                     gruntChance = 1; greenChance = 0; whiteBossChance = 0;
                 } else {
@@ -1507,6 +1555,31 @@
                     this.size = 55;
                     this.isBoss = true;
                     this.isDarkBoss = false;
+                } else if (forceType === 'redKing') {
+                    // Red King Boss — biggest, slowest, tankiest
+                    this.spriteId = 2950;
+                    this.health = 25;
+                    this.speed = 0.5;
+                    this.tier = 4;
+                    this.size = 80; // Biggest enemy in game
+                    this.isBoss = true;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isRedKing = true;
+                } else if (forceType === 'redMinion') {
+                    // Red Minion — fast charger that explodes
+                    this.spriteId = 2164;
+                    this.favoriteColor = '#cc0000';
+                    this.health = 3;
+                    this.speed = 1.5 + Math.random() * 0.5;
+                    this.tier = 2;
+                    this.size = 38;
+                    this.isBoss = false;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isRedMinion = true;
+                    this.charging = false;
+                    this.chargeTimer = 0;
                 } else {
                     // Dark purple bosses — BIG, splatter mostly black/psychedelic
                     const darkBosses = [6949, 1729, 2290];
@@ -1592,6 +1665,28 @@
 
                 }
                 
+                // Red Minion charging behavior
+                if (this.isRedMinion && !this.charging) {
+                    const distToPlayer = Math.hypot(this.x - player.x, this.y - player.y);
+                    if (distToPlayer < 50) {
+                        this.charging = true;
+                        this.chargeTimer = 60;
+                    }
+                }
+                if (this.charging) {
+                    this.chargeTimer--;
+                    if (this.chargeTimer <= 0) {
+                        // EXPLODE
+                        spawnRedSplat(this.x, this.y);
+                        player.health -= 1;
+                        screenShake = 5;
+                        playSound('enemy-death');
+                        // Mark for removal
+                        this.health = 0;
+                        this.exploded = true;
+                    }
+                }
+                
                 // Animation — fast legs to match speed
                 this.animTime += frameDt * 60;
                 if (Math.floor(this.animTime / 4) !== Math.floor((this.animTime - frameDt * 60) / 4)) {
@@ -1675,6 +1770,13 @@
                 // Hit flash effect
                 if (this.hitFlash > 0) {
                     ctx.filter = 'brightness(3)';
+                }
+                
+                // Red Minion charging flash effect
+                if (this.charging && Math.floor(this.chargeTimer / 4) % 2 === 0) {
+                    ctx.filter = (ctx.filter || 'none') + ' hue-rotate(0deg) saturate(2) contrast(1.5)';
+                    ctx.shadowColor = 'rgba(255,0,0,0.8)';
+                    ctx.shadowBlur = 15;
                 }
                 
                 // Draw sprite using sprite sheet
@@ -2037,6 +2139,11 @@
         let wavePause = 0; // ms timestamp when wave gap started
         const WAVE_GAP = 3500; // 3.5s breather between waves
         let firstFiveSpawned = 0; // first 5 grunts are solo (one at a time)
+        
+        // Red King boss phase
+        let redKingPhase = false;
+        let redKingDefeated = false;
+        let redKingPauseTime = 0;
         // Wave definitions — each wave is an array of "bursts"
         // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
         const WAVE_DEFS = [
@@ -2084,7 +2191,13 @@
             }
             
             const pos = getEdgeSpawnPos();
-            enemies.push(new Enemy(pos.x, pos.y));
+            
+            // 15% chance of Red Minion if Red King defeated
+            if (redKingDefeated && Math.random() < 0.15) {
+                enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
+            } else {
+                enemies.push(new Enemy(pos.x, pos.y));
+            }
             lastEnemySpawnTime = Date.now();
         }
         
@@ -2269,8 +2382,25 @@
                         wavePause = currentTime;
                     }
                 }
-            } else {
-                // Free-for-all: steady ramp
+            } else if (!redKingDefeated && !redKingPhase) {
+                // Check if all enemies are dead after wave 4 to spawn Red King
+                if (enemies.length === 0) {
+                    redKingPhase = true;
+                    // Screen dimming and bass tone are handled in render loop
+                    // Spawn Red King from random edge
+                    const pos = getEdgeSpawnPos();
+                    enemies.push(new Enemy(pos.x, pos.y, false, 'redKing'));
+                    lastEnemySpawnTime = currentTime;
+                    // Play deep bass tone
+                    synthTone(80, 800);
+                }
+            } else if (redKingPhase) {
+                // Red King phase - don't spawn anything, just wait for king to die
+                // The death handler will set redKingDefeated = true and redKingPhase = false
+            } else if (redKingDefeated) {
+                // Free-for-all: steady ramp (after Red King defeat pause)
+                if (Date.now() - redKingPauseTime < 1500) return; // 1.5s pause
+                
                 const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
                 
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
@@ -2375,6 +2505,19 @@
                             if (playerBuffs.skully > 0) {
                                 spawnSkullySplat(enemy.x, enemy.y);
                                 playerBuffs.skully--;
+                            } else if (enemy.isRedKing) {
+                                spawnRedSplat(enemy.x, enemy.y);
+                                // Red King death - end phase and start free-for-all
+                                redKingPhase = false;
+                                redKingDefeated = true;
+                                redKingPauseTime = Date.now();
+                                screenShake = 10;
+                                // Play triumph sound (rising synth chord)
+                                synthTone(220, 100);
+                                setTimeout(() => synthTone(277, 100), 100);
+                                setTimeout(() => synthTone(330, 100), 200);
+                            } else if (enemy.isRedMinion) {
+                                spawnRedSplat(enemy.x, enemy.y);
                             } else if (enemy.isDarkBoss) {
                                 spawnDarkSplat(enemy.x, enemy.y);
                             } else if (enemy.isBoss) {
@@ -2568,7 +2711,20 @@
                         screenShake = Math.max(screenShake, enemy.isBoss ? 6 : 3);
                         
                         // Normal death splatter
-                        if (enemy.isDarkBoss) {
+                        if (enemy.isRedKing) {
+                            spawnRedSplat(enemy.x, enemy.y);
+                            // Red King death - end phase and start free-for-all
+                            redKingPhase = false;
+                            redKingDefeated = true;
+                            redKingPauseTime = Date.now();
+                            screenShake = 10;
+                            // Play triumph sound (rising synth chord)
+                            synthTone(220, 100);
+                            setTimeout(() => synthTone(277, 100), 100);
+                            setTimeout(() => synthTone(330, 100), 200);
+                        } else if (enemy.isRedMinion) {
+                            spawnRedSplat(enemy.x, enemy.y);
+                        } else if (enemy.isDarkBoss) {
                             spawnDarkSplat(enemy.x, enemy.y);
                         } else if (enemy.isBoss) {
                             spawnWhitePaintBomb(enemy.x, enemy.y);
@@ -2760,6 +2916,12 @@
                 }
                 
                 player.draw();
+                
+                // Red King phase - screen dimming effect
+                if (redKingPhase) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
                 
                 // Aim indicator removed — lasers are the feedback
                 
@@ -3906,6 +4068,7 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
+            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0;
         }
 
         function startGame() {
@@ -3973,6 +4136,7 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
+            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0;
         }
         
         function restartGame() {
