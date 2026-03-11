@@ -1593,7 +1593,7 @@
                     this.spriteId = 2164;
                     this.favoriteColor = '#cc0000';
                     this.health = 3;
-                    this.speed = 1.5 + Math.random() * 0.5;
+                    this.speed = 2.0 + Math.random() * 0.8;
                     this.tier = 2;
                     this.size = 38;
                     this.isBoss = false;
@@ -1691,9 +1691,9 @@
                 // Red Minion charging behavior
                 if (this.isRedMinion && !this.charging) {
                     const distToPlayer = Math.hypot(this.x - player.x, this.y - player.y);
-                    if (distToPlayer < 50) {
+                    if (distToPlayer < 90) {
                         this.charging = true;
-                        this.chargeTimer = 60;
+                        this.chargeTimer = 45; // ~0.75 seconds to explode
                     }
                 }
                 if (this.charging) {
@@ -1795,11 +1795,13 @@
                     ctx.filter = 'brightness(3)';
                 }
                 
-                // Red Minion charging flash effect
-                if (this.charging && Math.floor(this.chargeTimer / 4) % 2 === 0) {
-                    ctx.filter = (ctx.filter || 'none') + ' hue-rotate(0deg) saturate(2) contrast(1.5)';
-                    ctx.shadowColor = 'rgba(255,0,0,0.8)';
-                    ctx.shadowBlur = 15;
+                // Red Minion charging flash — pulsing red glow that gets faster
+                if (this.charging) {
+                    const flashRate = this.chargeTimer < 15 ? 2 : 4; // faster flash near explosion
+                    if (Math.floor(this.chargeTimer / flashRate) % 2 === 0) {
+                        ctx.shadowColor = 'rgba(255,0,0,0.9)';
+                        ctx.shadowBlur = 20;
+                    }
                 }
                 
                 // Draw sprite using sprite sheet
@@ -1816,6 +1818,18 @@
                     ctx.beginPath();
                     ctx.arc(this.x, this.y, this.size * 0.8, 0, Math.PI * 2);
                     ctx.fill();
+                }
+                
+                // Red pulse ring for charging minions
+                if (this.charging) {
+                    const pulse = Math.sin(this.chargeTimer * 0.3) * 0.3 + 0.4;
+                    ctx.globalAlpha = pulse;
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size + 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
                 }
                 
                 ctx.restore();
@@ -2412,7 +2426,7 @@
                     if (!redKingPauseTime) {
                         // Start the pause timer
                         redKingPauseTime = currentTime;
-                    } else if (currentTime - redKingPauseTime >= 5000) {
+                    } else if (currentTime - redKingPauseTime >= 4000) {
                         // 3 second breather, then spawn
                         redKingPhase = true;
                         redKingSpawnTime = currentTime;
