@@ -649,7 +649,7 @@
             const row = dirMap[animation];
             if (row === undefined) return false;
             const col = frame % 6;
-            const cs = 96;
+            const cs = (spriteSheet.naturalWidth || spriteSheet.width) / 6; // auto-detect cell size
             try {
                 // Foot shadow — oval at the bottom of the sprite
                 ctx.save();
