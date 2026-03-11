@@ -1592,10 +1592,10 @@
                     this.isGreen = false;
                     this.isRedKing = true;
                 } else if (forceType === 'redMinion') {
-                    // Red Minion — fast charger that explodes
+                    // Red Minion — indestructible bomber, explodes after 4 seconds
                     this.spriteId = 2164;
                     this.favoriteColor = '#cc0000';
-                    this.health = 3;
+                    this.health = 9999; // indestructible
                     this.speed = 2.0 + Math.random() * 0.8;
                     this.tier = 2;
                     this.size = 38;
@@ -1603,8 +1603,8 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isRedMinion = true;
-                    this.charging = false;
-                    this.chargeTimer = 0;
+                    this.fuseTimer = 240; // 4 seconds at 60fps
+                    this.knockbackResist = 0.15; // low resist = bounces a lot
                 } else {
                     // Dark purple bosses — BIG, splatter mostly black/psychedelic
                     const darkBosses = [6949, 1729, 2290];
@@ -1692,22 +1692,31 @@
                 }
                 
                 // Red Minion charging behavior
-                if (this.isRedMinion && !this.charging) {
-                    const distToPlayer = Math.hypot(this.x - player.x, this.y - player.y);
-                    if (distToPlayer < 90) {
-                        this.charging = true;
-                        this.chargeTimer = 45; // ~0.75 seconds to explode
-                    }
-                }
-                if (this.charging) {
-                    this.chargeTimer--;
-                    if (this.chargeTimer <= 0) {
-                        // EXPLODE — grunt-sized red splat
+                // Red Minion fuse countdown — explodes after 4 seconds regardless
+                if (this.isRedMinion) {
+                    this.fuseTimer -= frameDt * 60;
+                    if (this.fuseTimer <= 0) {
+                        // EXPLODE — red paint bomb + shrapnel particles
                         spawnPixelDeath(this.x, this.y, '#cc0000');
-                        player.health -= 1;
+                        // Explosion burst — fast red particles flying outward
+                        const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444', '#ff6600'];
+                        for (let i = 0; i < 30; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = 4 + Math.random() * 10;
+                            particles.push(new Particle(
+                                this.x, this.y,
+                                Math.cos(angle) * speed, Math.sin(angle) * speed,
+                                redColors[Math.floor(Math.random() * redColors.length)],
+                                10 + Math.floor(Math.random() * 15), 0.8 + Math.random()
+                            ));
+                        }
+                        // Damage player if close enough
+                        const distToPlayer = Math.hypot(this.x - player.x, this.y - player.y);
+                        if (distToPlayer < 80) {
+                            player.health -= 1;
+                        }
                         screenShake = 5;
                         playSound('red-minion-explode');
-                        // Mark for removal
                         this.health = 0;
                         this.exploded = true;
                     }
@@ -1742,15 +1751,18 @@
 
             
             takeDamage(damage, projectileAngle = null) {
-                this.health -= damage;
+                // Red minions are indestructible — take no damage, just knockback
+                if (!this.isRedMinion) {
+                    this.health -= damage;
+                }
                 playSound('enemy-hit');
                 
                 // Hit flash effect
                 this.hitFlash = 3;
                 
-                // Knockback from projectile
+                // Knockback from projectile — red minions bounce back hard
                 if (projectileAngle !== null) {
-                    const knockbackForce = 8;
+                    const knockbackForce = this.isRedMinion ? 25 : 8;
                     this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
                     this.knockbackY = Math.sin(projectileAngle) * knockbackForce;
                 }
@@ -1798,12 +1810,11 @@
                     ctx.filter = 'brightness(3)';
                 }
                 
-                // Red Minion charging flash — pulsing red glow that gets faster
-                if (this.charging) {
-                    const flashRate = this.chargeTimer < 15 ? 2 : 4; // faster flash near explosion
-                    if (Math.floor(this.chargeTimer / flashRate) % 2 === 0) {
-                        ctx.shadowColor = 'rgba(255,0,0,0.9)';
-                        ctx.shadowBlur = 20;
+                // Red Minion — flash faster as fuse runs out (last 1.5 seconds)
+                if (this.isRedMinion && this.fuseTimer < 90) {
+                    const flashRate = this.fuseTimer < 30 ? 3 : 6;
+                    if (Math.floor(this.fuseTimer / flashRate) % 2 === 0) {
+                        ctx.filter = 'brightness(2.5)';
                     }
                 }
                 
@@ -1823,17 +1834,7 @@
                     ctx.fill();
                 }
                 
-                // Red pulse ring for charging minions
-                if (this.charging) {
-                    const pulse = Math.sin(this.chargeTimer * 0.3) * 0.3 + 0.4;
-                    ctx.globalAlpha = pulse;
-                    ctx.strokeStyle = '#ff0000';
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size + 8, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
-                }
+
                 
                 ctx.restore();
             }
