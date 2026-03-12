@@ -95,6 +95,9 @@
         let haloReviveTime = 0;
         let haloHeroY = 0;  // Y position of descending halo hero
         let haloFlashTimer = 0;
+        let haloReviveCueStage = 0;
+        let haloTransformFlash = 0;
+        let haloResumePauseUntil = 0;
         
         // Tutorial state
         let tutorialStep = 0;
@@ -608,6 +611,27 @@
                 scheduleTone(550, 0.5, 0.1, 'sine', 450);
                 scheduleTone(660, 0.8, 0.15, 'sine', 600);
                 haptic([40, 20, 40, 20, 60, 30, 80]);
+            },
+            'halo-revive': () => {
+                // Heroic fantasy swell — a little Zelda-ish without getting syrupy
+                synthChord([392, 494, 587], 0.9, 0.08, 'triangle');   // G-B-D
+                scheduleTone(784, 0.5, 0.06, 'sine', 220);
+                scheduleTone(988, 0.55, 0.05, 'sine', 520);
+                scheduleTone(1175, 0.7, 0.05, 'sine', 860);
+                haptic([20, 20, 35, 20, 50]);
+            },
+            'halo-land': () => {
+                // Soft sacred landing chord
+                synthChord([523, 659, 784], 1.0, 0.08, 'sine');
+                scheduleTone(1047, 0.8, 0.05, 'sine', 120);
+                haptic([15, 20, 25]);
+            },
+            'halo-transform': () => {
+                // Bright transformation flash back into the regular hero
+                synthNoise(0.22, 0.08, 4500);
+                synthChord([659, 880, 1319], 0.55, 0.1, 'sine');
+                scheduleTone(1760, 0.35, 0.04, 'sine', 80);
+                haptic([20, 15, 35, 20, 45]);
             },
             'red-minion-explode': () => {
                 // Short sharp boom
@@ -2316,22 +2340,40 @@
             
             if (gameState === 'haloRevive') {
                 const elapsed = Date.now() - haloReviveTime;
-                // Halo hero floats down from top to player position over 1.5 seconds
                 const targetY = canvas.height / 2;
-                haloHeroY = -60 + (targetY + 60) * Math.min(1, elapsed / 1500);
+                const floatDuration = 1800;
+                const landHoldDuration = 1000;
+                const transformAt = floatDuration + landHoldDuration;
+                const resumeAt = 5200;
                 
-                if (elapsed > 1500 && elapsed < 2000) {
-                    // Flash/transform phase — at player position
-                    haloFlashTimer = 30;  // Will cause sprite swap in draw
+                if (haloReviveCueStage === 0) {
+                    playSound('halo-revive');
+                    haloReviveCueStage = 1;
                 }
                 
-                if (elapsed > 2500) {
-                    // Resume game
+                // Halo hero floats down from top to exact center
+                haloHeroY = -70 + (targetY + 70) * Math.min(1, elapsed / floatDuration);
+                
+                if (elapsed >= floatDuration && haloReviveCueStage === 1) {
+                    playSound('halo-land');
+                    haloTransformFlash = 18;
+                    haloReviveCueStage = 2;
+                }
+                
+                if (elapsed >= transformAt && haloReviveCueStage === 2) {
+                    playSound('halo-transform');
+                    haloTransformFlash = 40;
+                    haloReviveCueStage = 3;
+                }
+                
+                if (elapsed >= resumeAt) {
+                    // Resume game after a proper heroic pause
                     gameState = 'playing';
                     haloReviving = false;
                     player.health = 3;  // Restore health
                     player.x = canvas.width / 2;
                     player.y = canvas.height / 2;
+                    haloResumePauseUntil = Date.now() + 2200;
                     startMusic();  // Resume music
                 }
                 return;
@@ -2501,6 +2543,7 @@
             } else if (redKingDefeated) {
                 // Free-for-all: steady ramp (after Red King defeat pause)
                 if (Date.now() - redKingPauseTime < 3500) return; // 3.5s pause to breathe + grab halo
+                if (Date.now() < haloResumePauseUntil) return; // extra grace after the epic halo revive
                 
                 const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
                 
@@ -2542,8 +2585,9 @@
                 if (rainbowTimer <= 0) rainbowActive = false;
             }
             
-            // Halo flash timer update
+            // Halo flash timers
             if (haloFlashTimer > 0) haloFlashTimer -= frameDt * 60;
+            if (haloTransformFlash > 0) haloTransformFlash -= frameDt * 60;
             
             // No player trail during duck mode — trail comes from the projectiles instead
             
@@ -2855,7 +2899,11 @@
                         enemies = [];
                         haloReviving = true;
                         haloReviveTime = Date.now();
-                        haloHeroY = -60;  // Start above screen
+                        haloHeroY = -70;  // Start above screen
+                        haloReviveCueStage = 0;
+                        haloTransformFlash = 0;
+                        player.x = canvas.width / 2;
+                        player.y = canvas.height / 2;
                         gameState = 'haloRevive';
                     }, totalDeathTime);
                     
@@ -3205,22 +3253,58 @@
                 fireTrails.forEach(trail => trail.draw());
                 
                 const elapsed = Date.now() - haloReviveTime;
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const floatDuration = 1800;
+                const transformAt = 2800;
+                const haloPulse = 0.85 + Math.sin(elapsed / 120) * 0.15;
                 
-                // Draw the halo hero sprite floating down
-                if (elapsed <= 1500) {
-                    // Floating down phase
+                ctx.save();
+                ctx.globalAlpha = 0.18 + haloPulse * 0.12;
+                ctx.fillStyle = '#ffe680';
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, player.size * 2.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                
+                // Draw the halo hero floating down, then landing dead center
+                if (elapsed < transformAt) {
+                    const heroY = elapsed <= floatDuration ? haloHeroY : centerY;
                     if (sprites.haloSheet && sprites.haloSheet.complete) {
-                        if (!drawSprite(sprites.haloSheet, 'south', 'idle', Math.floor(elapsed / 100) % 4, canvas.width/2, haloHeroY, player.size)) {
-                            // Fallback circle
-                            ctx.fillStyle = '#ffd700';
-                            ctx.beginPath();
-                            ctx.arc(canvas.width/2, haloHeroY, player.size * 0.8, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
+                        drawSprite(sprites.haloSheet, 'south', 'idle', Math.floor(elapsed / 120) % 4, centerX, heroY, player.size * 1.08);
+                    }
+                    
+                    // Big halo aura while resting in the center
+                    if (elapsed >= floatDuration) {
+                        ctx.save();
+                        ctx.strokeStyle = 'rgba(255, 235, 140, 0.9)';
+                        ctx.lineWidth = 3;
+                        ctx.shadowBlur = 18;
+                        ctx.shadowColor = '#ffec8a';
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY - player.size * 1.15, player.size * 0.62 + Math.sin(elapsed / 80) * 2, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.restore();
                     }
                 } else {
-                    // After transform - draw normal hero (halo flash timer will handle sprite selection)
+                    // After the flash, show the normal hero back in the center
+                    player.x = centerX;
+                    player.y = centerY;
                     player.draw();
+                }
+                
+                if (haloTransformFlash > 0) {
+                    const flashAlpha = Math.min(0.85, haloTransformFlash / 40);
+                    ctx.save();
+                    const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, player.size * 4.5);
+                    grad.addColorStop(0, `rgba(255,255,255,${flashAlpha})`);
+                    grad.addColorStop(0.45, `rgba(255,245,180,${flashAlpha * 0.75})`);
+                    grad.addColorStop(1, 'rgba(255,245,180,0)');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, player.size * 4.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
                 }
             } else if (gameState === 'gallery') {
                 drawHangMode();
@@ -3794,9 +3878,9 @@
             if (hasHalo) {
                 const haloIcon = sprites.powerUps.halo;
                 if (haloIcon && haloIcon.complete && haloIcon.naturalWidth > 0) {
-                    const iconSize = 24;
-                    const iconX = hangX + hangW + 8;
-                    const iconY = btnY2 + (btnH - iconSize) / 2;
+                    const iconSize = 38;
+                    const iconX = hangX + hangW + 6;
+                    const iconY = btnY2 + (btnH - iconSize) / 2 - 2;
                     ctx.globalAlpha = 0.9;
                     try {
                         ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
@@ -4301,7 +4385,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
-            hasHalo = false; haloReviving = false; haloFlashTimer = 0;
+            hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
 
         function startGame() {
@@ -4370,7 +4454,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
-            hasHalo = false; haloReviving = false; haloFlashTimer = 0;
+            hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
         
         function restartGame() {
