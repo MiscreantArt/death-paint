@@ -2264,7 +2264,7 @@
         let waveQueue = null;
         const WAVE_SIZE = 10;
         // Spawn intervals per wave (ms between enemies)
-        const WAVE_INTERVALS = [2000, 1600, 1300, 1000];
+        const WAVE_INTERVALS = [2000, 1600, 1300, 1000, 1400, 1200, 1000, 900];
         let wavePause = 0; // ms timestamp when wave gap started
         const WAVE_GAP = 3500; // Default 3.5s breather between waves
         const WAVE_GAP_BY_WAVE = {
@@ -2317,6 +2317,38 @@
                 { count: 3, types: ['whiteBoss', 'darkBoss', 'grunt'], delay: 3000 },
                 { count: 3, types: ['green', 'whiteBoss', 'darkBoss'], delay: 3000 },
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 3000 },
+            ]},
+            // === POST-RED KING WAVES (5-8) — bombers join, intensity ramps ===
+            // Wave 5: mixed pairs with red minions introduced, faster pace
+            { bursts: [
+                { count: 2, types: ['grunt', 'green'], delay: 1800 },
+                { count: 2, types: ['redMinion', 'grunt'], delay: 2000 },
+                { count: 2, types: ['green', 'whiteBoss'], delay: 1800 },
+                { count: 2, types: ['grunt', 'redMinion'], delay: 2000 },
+                { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 2500 },
+            ]},
+            // Wave 6: triples, bombers more common, dark bosses return
+            { bursts: [
+                { count: 3, types: ['darkBoss', 'grunt', 'redMinion'], delay: 2500 },
+                { count: 3, types: ['green', 'whiteBoss', 'grunt'], delay: 2200 },
+                { count: 3, types: ['redMinion', 'darkBoss', 'green'], delay: 2500 },
+                { count: 3, types: ['grunt', 'redMinion', 'whiteBoss'], delay: 2200 },
+                { count: 3, types: ['darkBoss', 'green', 'redMinion'], delay: 2500 },
+            ]},
+            // Wave 7: quads, everything at once, 4 groups = 16 total
+            { bursts: [
+                { count: 4, types: ['grunt', 'darkBoss', 'redMinion', 'green'], delay: 2200 },
+                { count: 4, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss'], delay: 2200 },
+                { count: 4, types: ['redMinion', 'green', 'darkBoss', 'grunt'], delay: 2200 },
+                { count: 4, types: ['darkBoss', 'redMinion', 'whiteBoss', 'grunt'], delay: 2200 },
+            ]},
+            // Wave 8: heavy pressure, 5 groups of 4 = 20 total, fast spawns
+            { bursts: [
+                { count: 4, types: ['darkBoss', 'redMinion', 'grunt', 'green'], delay: 1800 },
+                { count: 4, types: ['redMinion', 'whiteBoss', 'darkBoss', 'grunt'], delay: 1800 },
+                { count: 4, types: ['grunt', 'redMinion', 'green', 'darkBoss'], delay: 1800 },
+                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'whiteBoss'], delay: 1800 },
+                { count: 4, types: ['redMinion', 'darkBoss', 'green', 'redMinion'], delay: 1800 },
             ]},
         ];
         let waveBurstIndex = 0;
@@ -2530,7 +2562,7 @@
                     firstFiveSpawned++;
                     lastEnemySpawnTime = currentTime;
                 }
-            } else if (currentWave <= 4) {
+            } else if (currentWave <= 8) {
                 const waveDef = WAVE_DEFS[currentWave - 1];
                 
                 // Gap between waves
@@ -2564,11 +2596,12 @@
                     currentWave++;
                     waveBurstIndex = 0;
                     burstSpawned = 0;
-                    if (currentWave <= 4) {
+                    if (currentWave <= 8 && currentWave !== 5 && currentWave !== 9) {
+                        // Normal wave gap (skip gap before wave 5 — Red King handles pause, skip 9 — Gold Crown handles)
                         wavePause = currentTime;
                     }
                 }
-            } else if (!redKingDefeated && !redKingPhase) {
+            } else if (currentWave === 5 && !redKingDefeated && !redKingPhase) {
                 // Wait for all enemies to die after wave 4, then pause before Red King
                 if (enemies.length === 0) {
                     if (!redKingPauseTime) {
@@ -2592,48 +2625,42 @@
                     enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
                     lastEnemySpawnTime = currentTime;
                 }
-            } else if (redKingDefeated) {
-                // Gold Crown boss trigger — spawns at kill threshold during free-for-all
-                if (!goldCrownDefeated && !goldCrownPhase && killCount >= goldCrownKillThreshold) {
-                    if (enemies.length === 0) {
-                        if (!goldCrownPauseTime) {
-                            goldCrownPauseTime = currentTime;
-                        } else if (currentTime - goldCrownPauseTime >= 4000) {
-                            goldCrownPhase = true;
-                            goldCrownSpawnTime = currentTime;
-                            const pos = getEdgeSpawnPos();
-                            enemies.push(new Enemy(pos.x, pos.y, false, 'goldCrown'));
-                            lastEnemySpawnTime = currentTime;
-                            playSound('red-king-enter'); // reuse boss entrance sound
-                        }
-                    }
-                    return; // Don't spawn normal enemies while waiting for Gold Crown
-                }
-                
-                if (goldCrownPhase) {
-                    // Trickle red minions during Gold Crown fight (same as Red King)
-                    const crownAliveTime = (currentTime - (goldCrownSpawnTime || currentTime)) / 1000;
-                    if (crownAliveTime > 3 && currentTime - lastEnemySpawnTime >= 2500 && enemies.length < 8) {
-                        const pos = getEdgeSpawnPos();
-                        enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
-                        lastEnemySpawnTime = currentTime;
-                    }
-                    return; // Don't spawn normal enemies during Gold Crown fight
-                }
-                
-                // Free-for-all: steady ramp (after Red King defeat pause)
+            } else if (redKingDefeated && currentWave === 5 && wavePause === 0) {
+                // Post-Red King: start waves 5-8 after breathing room
                 if (Date.now() - redKingPauseTime < 3500) return; // 3.5s pause to breathe + grab halo
-                if (Date.now() < haloResumePauseUntil) return; // extra grace after the epic halo revive
-                
+                if (Date.now() < haloResumePauseUntil) return;
+                wavePause = Date.now();
+            } else if (currentWave === 9 && !goldCrownDefeated && !goldCrownPhase) {
+                // After wave 8: Gold Crown boss
+                if (enemies.length === 0) {
+                    if (!goldCrownPauseTime) {
+                        goldCrownPauseTime = currentTime;
+                    } else if (currentTime - goldCrownPauseTime >= 4000) {
+                        goldCrownPhase = true;
+                        goldCrownSpawnTime = currentTime;
+                        const pos = getEdgeSpawnPos();
+                        enemies.push(new Enemy(pos.x, pos.y, false, 'goldCrown'));
+                        lastEnemySpawnTime = currentTime;
+                        playSound('red-king-enter');
+                    }
+                }
+            } else if (goldCrownPhase) {
+                // Trickle red minions during Gold Crown fight
+                const crownAliveTime = (currentTime - (goldCrownSpawnTime || currentTime)) / 1000;
+                if (crownAliveTime > 3 && currentTime - lastEnemySpawnTime >= 2500 && enemies.length < 8) {
+                    const pos = getEdgeSpawnPos();
+                    enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
+                    lastEnemySpawnTime = currentTime;
+                }
+            } else if (goldCrownDefeated) {
                 // Post-Gold Crown free-for-all
-                if (goldCrownDefeated && Date.now() - goldCrownPauseTime < 3500) return;
+                if (Date.now() - goldCrownPauseTime < 3500) return;
+                if (Date.now() < haloResumePauseUntil) return;
                 
                 const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
-                
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
                     spawnSingleEnemy();
                 }
-                
                 // Gradual difficulty — every 25s
                 if (Math.floor(gameTime / 25) > Math.floor((gameTime - 0.016) / 25)) {
                     enemySpeedMultiplier += 0.05;
