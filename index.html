@@ -2306,6 +2306,7 @@
         const WAVE_GAP_BY_WAVE = {
             3: 2800, // Wave 2 -> 3 a little snappier
             4: 4200, // Slightly longer breath before wave 4
+            5: 500,  // Very short — breathing room after Red King already provided the pause
             6: 2400,
             7: 2200,
             8: 2200
@@ -2682,10 +2683,15 @@
                     lastEnemySpawnTime = currentTime;
                 }
             } else if (redKingDefeated && currentWave === 5 && wavePause === 0) {
-                // Post-Red King: start waves 5-8 after breathing room
-                if (Date.now() - redKingPauseTime < 3500) return;
-                if (Date.now() < haloResumePauseUntil) return;
-                wavePause = Date.now();
+                // Post-Red King: 3.5s breathing room then start waves 5-8
+                // Don't return — just skip spawning so rest of game still runs
+                if (Date.now() - redKingPauseTime < 3500) { /* breathing room — no spawns but game keeps running */ }
+                else if (Date.now() < haloResumePauseUntil) { /* halo revive grace */ }
+                else {
+                    // Set wavePause so the 5-8 branch picks it up
+                    // Wave 5 gap is short since breathing room already happened
+                    wavePause = Date.now();
+                }
             } else if (currentWave >= 5 && currentWave <= 8) {
                 const waveDef = WAVE_DEFS[currentWave - 1];
                 const waveMaxOnScreen = WAVE_MAX_ON_SCREEN[currentWave] || maxEnemiesOnScreen;
@@ -2744,8 +2750,10 @@
                 }
             } else if (goldCrownDefeated) {
                 // Post-Gold Crown free-for-all
-                if (Date.now() - goldCrownPauseTime < 3500) return;
-                if (Date.now() < haloResumePauseUntil) return;
+                const gcBreathing = Date.now() - goldCrownPauseTime < 3500;
+                const gcHaloGrace = Date.now() < haloResumePauseUntil;
+                if (gcBreathing || gcHaloGrace) { /* no spawns, but game keeps running */ }
+                else {
                 
                 const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
@@ -2757,6 +2765,7 @@
                     playerSpeedBonus += 0.02;
                     maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
                 }
+                } // end else (not breathing)
             }
             } catch(spawnErr) {
                 // Surface spawn errors visibly
