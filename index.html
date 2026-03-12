@@ -1589,6 +1589,8 @@
                     gruntChance = 0; greenChance = 0; whiteBossChance = 0;
                 } else if (forceType === 'redMinion') {
                     gruntChance = 0; greenChance = 0; whiteBossChance = 0;
+                } else if (forceType === 'goldMinion1' || forceType === 'goldMinion2') {
+                    gruntChance = 0; greenChance = 0; whiteBossChance = 0;
                 } else if (forceGrunt) {
                     gruntChance = 1; greenChance = 0; whiteBossChance = 0;
                 } else {
@@ -2783,6 +2785,9 @@
                 gameState = 'crashed'; return;
             }
             
+            // Clean up boss-popped enemies (marked during collision loops to avoid mid-iteration reassignment)
+            enemies = enemies.filter(e => !e._markedDead);
+            
             // Update player
             player.update();
             
@@ -2876,14 +2881,14 @@
                                 screenShake = 10;
                                 playSound('red-king-death');
                                 
-                                // Pop all red minions when King dies
+                                // Pop all red minions when King dies (mark for removal, clean up after loop)
                                 enemies.forEach(e => {
                                     if (e.isRedMinion) {
                                         spawnPixelDeath(e.x, e.y, '#cc0000');
                                         e.health = 0;
+                                        e._markedDead = true;
                                     }
                                 });
-                                enemies = enemies.filter(e => e.health > 0);
                                 
                                 // Drop halo if player doesn't have one
                                 if (!hasHalo) {
@@ -2900,14 +2905,14 @@
                                 screenShake = 10;
                                 playSound('red-king-death'); // reuse boss death sound
                                 
-                                // Pop all minions
+                                // Pop all minions (mark for removal, clean up after loop)
                                 enemies.forEach(e => {
                                     if (e.isRedMinion || e.isGoldMinion1 || e.isGoldMinion2) {
                                         spawnPixelDeath(e.x, e.y, e.favoriteColor || '#cc0000');
                                         e.health = 0;
+                                        e._markedDead = true;
                                     }
                                 });
-                                enemies = enemies.filter(e => e.health > 0);
                                 
                                 // Drop halo reward
                                 if (!hasHalo) {
