@@ -2201,7 +2201,10 @@
         // Spawn intervals per wave (ms between enemies)
         const WAVE_INTERVALS = [2000, 1600, 1300, 1000];
         let wavePause = 0; // ms timestamp when wave gap started
-        const WAVE_GAP = 3500; // 3.5s breather between waves
+        const WAVE_GAP = 3500; // Default 3.5s breather between waves
+        const WAVE_GAP_BY_WAVE = {
+            3: 2800 // Wave 2 -> 3 should feel a little snappier
+        };
         let firstFiveSpawned = 0; // first 5 grunts are solo (one at a time)
         
         // Red King boss phase
@@ -2276,7 +2279,7 @@
                 captureArt();
             }
             if (gameState === 'preroll') { updatePreroll(); return; }
-            if (gameState !== 'playing' && gameState !== 'dying' && gameState !== 'tutorial') return;
+            if (gameState !== 'playing' && gameState !== 'dying' && gameState !== 'tutorial' && gameState !== 'haloRevive') return;
             if (gamePaused && (gameState === 'playing' || gameState === 'tutorial')) return;
             // Hit-pause: skip update frames for kill impact feel
             if (hitPause > 0) { hitPause -= 1; return; }
@@ -2438,7 +2441,8 @@
                 
                 // Gap between waves
                 if (wavePause > 0) {
-                    if (currentTime - wavePause >= WAVE_GAP) {
+                    const currentWaveGap = WAVE_GAP_BY_WAVE[currentWave] || WAVE_GAP;
+                    if (currentTime - wavePause >= currentWaveGap) {
                         wavePause = 0;
                         lastEnemySpawnTime = currentTime;
                     }
@@ -2496,7 +2500,7 @@
                 }
             } else if (redKingDefeated) {
                 // Free-for-all: steady ramp (after Red King defeat pause)
-                if (Date.now() - redKingPauseTime < 1500) return; // 1.5s pause
+                if (Date.now() - redKingPauseTime < 3500) return; // 3.5s pause to breathe + grab halo
                 
                 const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
                 
