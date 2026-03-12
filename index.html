@@ -3993,23 +3993,22 @@
             const labelY = artY + artH + fw + 28;
             ctx.textAlign = 'center';
             
-            if (!currentArtTitle) {
-                currentArtTitle = artTitles[Math.floor(Math.random() * artTitles.length)] + Math.floor(Math.random() * 999);
-            }
-            
-            // Title italic
-            ctx.font = 'italic 16px Georgia, serif';
+            // Game over message
+            ctx.font = 'italic 15px Georgia, serif';
             ctx.fillStyle = '#444444';
-            ctx.fillText(currentArtTitle, cx, labelY);
+            ctx.fillText('game over, but at least you made some art', cx, labelY);
             
-            // Coverage + Kills
+            // Stats — clear and separate
+            ctx.font = 'bold 14px Georgia, serif';
+            ctx.fillStyle = '#333333';
+            ctx.fillText(`${killCount} kills`, cx, labelY + 24);
             ctx.font = '13px Georgia, serif';
             ctx.fillStyle = '#777777';
-            ctx.fillText(`${canvasCoverage}% canvas covered  ·  ${killCount} kills`, cx, labelY + 20);
+            ctx.fillText(`${canvasCoverage}% canvas covered`, cx, labelY + 42);
             
             // Buttons
             if (elapsed > 2) {
-                const btnY = labelY + 38;
+                const btnY = labelY + 56;
                 const btnW = 130, btnH = 34;
                 
                 // Save button — centered
