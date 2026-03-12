@@ -4135,22 +4135,32 @@
             ctx.fillStyle = '#4a3520';
             ctx.fillText('hang art', hangX + hangW/2, btnY2 + 20);
             
-            // Halo icon if player has one
+            // Halo icon if player has one — fits inside toolbar
             if (hasHalo) {
                 const haloIcon = sprites.powerUps.halo;
                 if (haloIcon && haloIcon.complete && haloIcon.naturalWidth > 0) {
-                    const iconSize = 78;
-                    const iconX = hangX + hangW + 2;
-                    const iconY = btnY2 + (btnH - iconSize) / 2 - 18;
-                    ctx.globalAlpha = 0.9;
+                    const iconSize = 32;
+                    const iconX = hangX + hangW + 8;
+                    const iconY = btnY2 + (btnH - iconSize) / 2;
+                    ctx.globalAlpha = 0.85;
                     try {
                         ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
-                    } catch (e) {
-                        // Broken image state fallback — skip icon instead of crashing
-                    }
+                    } catch (e) {}
                     ctx.globalAlpha = 1;
                 }
             }
+            
+            // Debug: wave indicator (tiny, bottom-left)
+            ctx.font = '9px monospace';
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.textAlign = 'left';
+            let waveLabel = 'w' + currentWave;
+            if (redKingPhase) waveLabel += ' RK';
+            if (redKingDefeated) waveLabel += ' RKd';
+            if (goldCrownPhase) waveLabel += ' GC';
+            if (goldCrownDefeated) waveLabel += ' GCd';
+            waveLabel += ' e' + enemies.length;
+            ctx.fillText(waveLabel, 4, canvas.height - 4);
             
             // No end button — hang IS the end
             endBtnRect = null;
