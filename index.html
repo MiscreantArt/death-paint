@@ -3737,9 +3737,9 @@
             const cy = canvas.height / 2;
             const joyRadius = Math.min(halfW * 0.28, 50);
             const leftJoyX = halfW / 2;
-            const leftJoyY = cy + canvas.height * 0.12;
+            const leftJoyY = canvas.height * 0.72;
             const rightJoyX = halfW + halfW / 2;
-            const rightJoyY = cy + canvas.height * 0.12;
+            const rightJoyY = canvas.height * 0.72;
             const elapsed = (Date.now() - tutorialStepStartTime) / 1000;
             const pulse = 0.5 + 0.5 * Math.sin(elapsed * 3);
             
