@@ -3673,6 +3673,37 @@
         }
         
         let skipButtonRect = null;
+        // Draw a joystick icon (base ring + nub)
+        function drawJoystick(cx, cy, radius, nubOffX, nubOffY, alpha) {
+            ctx.globalAlpha = alpha;
+            // Outer ring
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            // Inner dashed ring
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius * 0.55, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Nub
+            const nubR = radius * 0.32;
+            const nubX = cx + nubOffX * radius * 0.4;
+            const nubY = cy + nubOffY * radius * 0.4;
+            ctx.beginPath();
+            ctx.arc(nubX, nubY, nubR, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+        
         function drawTutorial() {
             // Clean white background like normal game
             ctx.fillStyle = '#ffffff';
@@ -3704,17 +3735,24 @@
             // Tutorial overlay based on current step
             const halfW = canvas.width / 2;
             const cy = canvas.height / 2;
+            const joyRadius = Math.min(halfW * 0.28, 50);
+            const leftJoyX = halfW / 2;
+            const leftJoyY = cy + canvas.height * 0.12;
+            const rightJoyX = halfW + halfW / 2;
+            const rightJoyY = cy + canvas.height * 0.12;
+            const elapsed = (Date.now() - tutorialStepStartTime) / 1000;
+            const pulse = 0.5 + 0.5 * Math.sin(elapsed * 3);
             
             ctx.save();
             
             if (tutorialStep === 1) {
-                // Step 1: "MOVE" - left half highlighted, right dimmed
+                // Step 1: "MOVE" — left side active with joystick, right dimmed
                 ctx.fillStyle = 'rgba(0,0,0,0.35)';
-                ctx.fillRect(0, 0, halfW, canvas.height); // left less dim
+                ctx.fillRect(0, 0, halfW, canvas.height);
                 ctx.fillStyle = 'rgba(0,0,0,0.6)';
-                ctx.fillRect(halfW, 0, halfW, canvas.height); // right fully dimmed
+                ctx.fillRect(halfW, 0, halfW, canvas.height);
                 
-                // Divider line
+                // Divider
                 ctx.strokeStyle = 'rgba(255,255,255,0.15)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
@@ -3722,30 +3760,35 @@
                 ctx.lineTo(halfW, canvas.height);
                 ctx.stroke();
                 
-                // Left text
-                const fontSize = Math.max(18, Math.floor(canvas.width / 16));
-                const subSize = Math.max(14, Math.floor(fontSize * 0.6));
-                ctx.textAlign = 'center';
+                // Left joystick — animated nub moving in circle to show "drag"
+                const nubAngle = elapsed * 1.8;
+                drawJoystick(leftJoyX, leftJoyY, joyRadius, Math.cos(nubAngle), Math.sin(nubAngle), 0.7 + pulse * 0.3);
                 
+                // Right joystick — static, dimmed
+                drawJoystick(rightJoyX, rightJoyY, joyRadius, 0, 0, 0.2);
+                
+                // Labels
+                const fontSize = Math.max(16, Math.floor(canvas.width / 18));
+                const subSize = Math.max(12, Math.floor(fontSize * 0.6));
+                ctx.textAlign = 'center';
                 ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
                 ctx.fillStyle = '#ffffff';
                 ctx.shadowColor = 'rgba(255,255,255,0.5)';
                 ctx.shadowBlur = 8;
-                ctx.fillText('HOLD', halfW / 2, cy - fontSize);
-                ctx.fillText('+ DRAG', halfW / 2, cy);
+                ctx.fillText('MOVE', leftJoyX, leftJoyY - joyRadius - 18);
                 ctx.shadowBlur = 0;
                 ctx.font = `${subSize}px 'Courier New', monospace`;
-                ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                ctx.fillText('to move', halfW / 2, cy + subSize + 12);
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.fillText('hold + drag left side', leftJoyX, leftJoyY + joyRadius + 22);
                 
             } else if (tutorialStep === 2) {
-                // Step 2: "SHOOT" - right half highlighted, left dimmed  
+                // Step 2: "SHOOT" — right side active, left dimmed
                 ctx.fillStyle = 'rgba(0,0,0,0.6)';
-                ctx.fillRect(0, 0, halfW, canvas.height); // left dimmed
+                ctx.fillRect(0, 0, halfW, canvas.height);
                 ctx.fillStyle = 'rgba(0,0,0,0.35)';
-                ctx.fillRect(halfW, 0, halfW, canvas.height); // right less dim
+                ctx.fillRect(halfW, 0, halfW, canvas.height);
                 
-                // Divider line
+                // Divider
                 ctx.strokeStyle = 'rgba(255,255,255,0.15)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
@@ -3753,22 +3796,27 @@
                 ctx.lineTo(halfW, canvas.height);
                 ctx.stroke();
                 
-                // Right text
-                const fontSize = Math.max(18, Math.floor(canvas.width / 16));
-                const subSize = Math.max(14, Math.floor(fontSize * 0.6));
-                ctx.textAlign = 'center';
+                // Left joystick — now active (player already knows movement)
+                const leftNub = leftZone.active ? { x: leftZone.currentDirection.x, y: leftZone.currentDirection.y } : { x: 0, y: 0 };
+                drawJoystick(leftJoyX, leftJoyY, joyRadius, leftNub.x, leftNub.y, 0.35);
                 
+                // Right joystick — animated nub pulsing outward to show "aim + shoot"
+                const aimAngle = elapsed * 1.2;
+                drawJoystick(rightJoyX, rightJoyY, joyRadius, Math.cos(aimAngle) * 0.8, Math.sin(aimAngle) * 0.8, 0.7 + pulse * 0.3);
+                
+                // Labels
+                const fontSize = Math.max(16, Math.floor(canvas.width / 18));
+                const subSize = Math.max(12, Math.floor(fontSize * 0.6));
+                ctx.textAlign = 'center';
                 ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
                 ctx.fillStyle = '#ffffff';
                 ctx.shadowColor = 'rgba(255,255,255,0.5)';
                 ctx.shadowBlur = 8;
-                ctx.fillText('HOLD', halfW + halfW / 2, cy - fontSize);
-                ctx.fillText('RIGHT SIDE', halfW + halfW / 2, cy);
+                ctx.fillText('SHOOT', rightJoyX, rightJoyY - joyRadius - 18);
                 ctx.shadowBlur = 0;
                 ctx.font = `${subSize}px 'Courier New', monospace`;
-                ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                ctx.fillText('to aim + shoot', halfW + halfW / 2, cy + subSize + 12);
-                
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.fillText('hold + drag to aim', rightJoyX, rightJoyY + joyRadius + 22);
             }
             
             // SKIP button — top right, always visible (except step 3)
