@@ -706,7 +706,7 @@
             { type: 'chromie', birdId: 12, color: '#ff00ff', duration: 0 },    // Rainbow trail + shockwave sound
             { type: 'duck', birdId: 5568, color: '#ffdd00', duration: 5, killBased: true },    // Duck — 5 kills
             { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 },  // Death touch - melee kills, but vulnerable to shots
-            { type: 'crown', birdId: 5602, color: '#ffd700', duration: 5, killBased: true },  // Freeze — 5 kills
+            { type: 'crown', birdId: 5602, color: '#ffd700', duration: 0 },  // Instant freeze all enemies 4s
             { type: 'halo', birdId: 6295, color: '#ffd700', duration: 0 }  // Extra life
         ];
         
@@ -714,7 +714,7 @@
         let playerBuffs = {
             duck: 0,     // Cosmetic duck noises
             skully: 0,   // Next N kills explode black
-            crown: 0,    // Freeze effect on kills
+            crown: 0,    // Crown freeze active (timer in frames)
             halo: false  // Player has a stored halo (extra life)
         };
         
@@ -738,7 +738,7 @@
             allLoads.push(new Promise(r => { sprites.heroSheet.onload = r; sprites.heroSheet.onerror = r; }));
             
             // ALL enemy sheets — wait for them
-            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164, 6295, 5602];
+            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164, 6295, 5602, 2404, 5609];
             enemyIds.forEach(id => {
                 const img = new Image();
                 img.src = `sheets/${id}.png`;
@@ -1668,6 +1668,30 @@
                     this.isRedMinion = true;
                     this.fuseTimer = 180; // 3 seconds at 60fps
                     this.knockbackResist = 0.15; // low resist = bounces a lot
+                } else if (forceType === 'goldMinion1') {
+                    // Gold Crown guard — chunkier bodyguard
+                    this.spriteId = 2404;
+                    this.favoriteColor = '#d4a017';
+                    this.health = 12;
+                    this.speed = 0.95;
+                    this.tier = 3;
+                    this.size = 58;
+                    this.isBoss = true;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isGoldMinion1 = true;
+                } else if (forceType === 'goldMinion2') {
+                    // Gold Crown herald — quicker support pest
+                    this.spriteId = 5609;
+                    this.favoriteColor = '#ffd966';
+                    this.health = 7;
+                    this.speed = 1.45;
+                    this.tier = 2;
+                    this.size = 46;
+                    this.isBoss = false;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isGoldMinion2 = true;
                 } else {
                     // Dark purple bosses — BIG, splatter mostly black/psychedelic
                     const darkBosses = [6949, 1729, 2290];
@@ -1716,7 +1740,14 @@
                 // Frozen timer handling
                 if (this.frozenTimer > 0) {
                     this.frozenTimer -= frameDt * 60;
-                    return; // Skip movement while frozen
+                    // Walk animation continues (walking in place) but no movement
+                    this.animTimer += frameDt * 60;
+                    if (this.animTimer >= 8) { this.animTimer = 0; this.animFrame = (this.animFrame + 1) % 6; }
+                    // When crown freeze ends, remove bomber vulnerability
+                    if (this.frozenTimer <= 0 && this.crownVulnerable) {
+                        this.crownVulnerable = false;
+                    }
+                    return; // Skip movement
                 }
                 
                 // Tutorial step 3: run straight across, don't chase player
@@ -1821,8 +1852,8 @@
 
             
             takeDamage(damage, projectileAngle = null) {
-                // Red minions are indestructible — take no damage, just knockback
-                if (!this.isRedMinion) {
+                // Red minions are indestructible — UNLESS crown freeze makes them vulnerable
+                if (!this.isRedMinion || this.crownVulnerable) {
                     this.health -= damage;
                 }
                 playSound('enemy-hit');
@@ -2146,10 +2177,15 @@
                         playerBuffs.skully = 5; // Kill count, not time
                         break;
                     case 'crown':
-                        // Freeze nearby enemies briefly on each kill
+                        // INSTANT FREEZE — all enemies frozen for 4 seconds
                         playSound('chromie-shockwave');
-                        haptic([20, 10, 20]);
-                        playerBuffs.crown = powerUp.duration;
+                        haptic([20, 10, 20, 10, 40]);
+                        playerBuffs.crown = 240; // 4 seconds at 60fps
+                        // Freeze all current enemies and make red bombers killable
+                        enemies.forEach(e => {
+                            e.frozenTimer = 240;
+                            if (e.isRedMinion) e.crownVulnerable = true; // bombers become killable
+                        });
                         break;
                     case 'halo':
                         // Extra life — store it, don't use immediately
@@ -2268,7 +2304,17 @@
         let wavePause = 0; // ms timestamp when wave gap started
         const WAVE_GAP = 3500; // Default 3.5s breather between waves
         const WAVE_GAP_BY_WAVE = {
-            3: 2800 // Wave 2 -> 3 should feel a little snappier
+            3: 2800, // Wave 2 -> 3 a little snappier
+            4: 4200, // Slightly longer breath before wave 4
+            6: 2400,
+            7: 2200,
+            8: 2200
+        };
+        const WAVE_MAX_ON_SCREEN = {
+            5: 5,
+            6: 6,
+            7: 8,
+            8: 10
         };
         let firstFiveSpawned = 0; // first 5 grunts are solo (one at a time)
         
@@ -2318,37 +2364,38 @@
                 { count: 3, types: ['green', 'whiteBoss', 'darkBoss'], delay: 3000 },
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 3000 },
             ]},
-            // === POST-RED KING WAVES (5-8) — bombers join, intensity ramps ===
-            // Wave 5: mixed pairs with red minions introduced, faster pace
+            // === POST-RED KING WAVES (5-8) — stricter escalation into Gold Crown ===
+            // Wave 5: 15 total, still readable, no bombers yet
             { bursts: [
-                { count: 2, types: ['grunt', 'green'], delay: 1800 },
-                { count: 2, types: ['redMinion', 'grunt'], delay: 2000 },
-                { count: 2, types: ['green', 'whiteBoss'], delay: 1800 },
-                { count: 2, types: ['grunt', 'redMinion'], delay: 2000 },
-                { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 2500 },
+                { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 2400 },
+                { count: 3, types: ['grunt', 'green', 'darkBoss'], delay: 2400 },
+                { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 2400 },
+                { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2400 },
+                { count: 3, types: ['grunt', 'green', 'darkBoss'], delay: 2600 },
             ]},
-            // Wave 6: triples, bombers more common, dark bosses return
+            // Wave 6: 16 total, bombers enter the normal mix lightly
             { bursts: [
-                { count: 3, types: ['darkBoss', 'grunt', 'redMinion'], delay: 2500 },
-                { count: 3, types: ['green', 'whiteBoss', 'grunt'], delay: 2200 },
-                { count: 3, types: ['redMinion', 'darkBoss', 'green'], delay: 2500 },
-                { count: 3, types: ['grunt', 'redMinion', 'whiteBoss'], delay: 2200 },
-                { count: 3, types: ['darkBoss', 'green', 'redMinion'], delay: 2500 },
+                { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 2300 },
+                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2300 },
+                { count: 4, types: ['whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2300 },
+                { count: 4, types: ['grunt', 'redMinion', 'whiteBoss', 'darkBoss'], delay: 2500 },
             ]},
-            // Wave 7: quads, everything at once, 4 groups = 16 total
+            // Wave 7: 18 total, six bursts of 3, more later-wave pressure
             { bursts: [
-                { count: 4, types: ['grunt', 'darkBoss', 'redMinion', 'green'], delay: 2200 },
-                { count: 4, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss'], delay: 2200 },
-                { count: 4, types: ['redMinion', 'green', 'darkBoss', 'grunt'], delay: 2200 },
-                { count: 4, types: ['darkBoss', 'redMinion', 'whiteBoss', 'grunt'], delay: 2200 },
+                { count: 3, types: ['darkBoss', 'redMinion', 'grunt'], delay: 2200 },
+                { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 2200 },
+                { count: 3, types: ['redMinion', 'darkBoss', 'grunt'], delay: 2200 },
+                { count: 3, types: ['whiteBoss', 'redMinion', 'green'], delay: 2200 },
+                { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2200 },
+                { count: 3, types: ['redMinion', 'darkBoss', 'green'], delay: 2400 },
             ]},
-            // Wave 8: heavy pressure, 5 groups of 4 = 20 total, fast spawns
+            // Wave 8: 20 total, heavy ramp before Gold Crown
             { bursts: [
-                { count: 4, types: ['darkBoss', 'redMinion', 'grunt', 'green'], delay: 1800 },
-                { count: 4, types: ['redMinion', 'whiteBoss', 'darkBoss', 'grunt'], delay: 1800 },
-                { count: 4, types: ['grunt', 'redMinion', 'green', 'darkBoss'], delay: 1800 },
-                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'whiteBoss'], delay: 1800 },
-                { count: 4, types: ['redMinion', 'darkBoss', 'green', 'redMinion'], delay: 1800 },
+                { count: 4, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss'], delay: 2000 },
+                { count: 4, types: ['redMinion', 'darkBoss', 'green', 'grunt'], delay: 2000 },
+                { count: 4, types: ['whiteBoss', 'redMinion', 'darkBoss', 'grunt'], delay: 2000 },
+                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2000 },
+                { count: 4, types: ['redMinion', 'whiteBoss', 'darkBoss', 'grunt'], delay: 2200 },
             ]},
         ];
         let waveBurstIndex = 0;
@@ -2387,6 +2434,21 @@
             if (gamePaused && (gameState === 'playing' || gameState === 'tutorial')) return;
             // Hit-pause: skip update frames for kill impact feel
             if (hitPause > 0) { hitPause -= 1; return; }
+            
+            // Crown freeze global timer
+            if (playerBuffs.crown > 0) {
+                playerBuffs.crown -= frameDt * 60;
+                if (playerBuffs.crown <= 0) {
+                    playerBuffs.crown = 0;
+                    playSound('powerup-expire');
+                    // Unfreeze all enemies, remove bomber vulnerability
+                    enemies.forEach(e => {
+                        e.frozenTimer = 0;
+                        e.crownVulnerable = false;
+                    });
+                }
+            }
+            
             if (gameState === 'dying') {
                 // Only update drift pixels during death sequence
                 dyingDriftPixels = dyingDriftPixels.filter(p => {
@@ -2554,7 +2616,10 @@
             const currentTime = Date.now();
             try {
             
-            if (firstFiveSpawned < 5) {
+            // No spawning during crown freeze
+            if (playerBuffs.crown > 0) {
+                // Skip all spawn logic
+            } else if (firstFiveSpawned < 5) {
                 // First 5 grunts: one at a time, wait until killed before next
                 if (enemies.length === 0 && currentTime - lastEnemySpawnTime >= 800) {
                     const pos = getEdgeSpawnPos();
@@ -2562,10 +2627,9 @@
                     firstFiveSpawned++;
                     lastEnemySpawnTime = currentTime;
                 }
-            } else if (currentWave <= 8) {
+            } else if (currentWave <= 4) {
                 const waveDef = WAVE_DEFS[currentWave - 1];
                 
-                // Gap between waves
                 if (wavePause > 0) {
                     const currentWaveGap = WAVE_GAP_BY_WAVE[currentWave] || WAVE_GAP;
                     if (currentTime - wavePause >= currentWaveGap) {
@@ -2574,9 +2638,7 @@
                     }
                 } else if (waveBurstIndex < waveDef.bursts.length) {
                     const burst = waveDef.bursts[waveBurstIndex];
-                    
                     if (burstSpawned < burst.count) {
-                        // Spawn enemies within burst (close together)
                         if (currentTime - lastEnemySpawnTime >= burstDelay) {
                             const pos = getEdgeSpawnPos();
                             const type = burst.types[burstSpawned % burst.types.length];
@@ -2584,20 +2646,16 @@
                             burstSpawned++;
                             lastEnemySpawnTime = currentTime;
                         }
-                    } else {
-                        // Burst done — wait for delay before next burst
-                        if (currentTime - lastEnemySpawnTime >= burst.delay) {
-                            waveBurstIndex++;
-                            burstSpawned = 0;
-                        }
+                    } else if (currentTime - lastEnemySpawnTime >= burst.delay) {
+                        waveBurstIndex++;
+                        burstSpawned = 0;
                     }
                 } else {
-                    // Wave done — gap before next
                     currentWave++;
                     waveBurstIndex = 0;
                     burstSpawned = 0;
-                    if (currentWave <= 8 && currentWave !== 5 && currentWave !== 9) {
-                        // Normal wave gap (skip gap before wave 5 — Red King handles pause, skip 9 — Gold Crown handles)
+                    // Wave 4 -> Red King handles its own pause
+                    if (currentWave <= 4) {
                         wavePause = currentTime;
                     }
                 }
@@ -2605,10 +2663,8 @@
                 // Wait for all enemies to die after wave 4, then pause before Red King
                 if (enemies.length === 0) {
                     if (!redKingPauseTime) {
-                        // Start the pause timer
                         redKingPauseTime = currentTime;
                     } else if (currentTime - redKingPauseTime >= 4000) {
-                        // 3 second breather, then spawn
                         redKingPhase = true;
                         redKingSpawnTime = currentTime;
                         const pos = getEdgeSpawnPos();
@@ -2627,9 +2683,41 @@
                 }
             } else if (redKingDefeated && currentWave === 5 && wavePause === 0) {
                 // Post-Red King: start waves 5-8 after breathing room
-                if (Date.now() - redKingPauseTime < 3500) return; // 3.5s pause to breathe + grab halo
+                if (Date.now() - redKingPauseTime < 3500) return;
                 if (Date.now() < haloResumePauseUntil) return;
                 wavePause = Date.now();
+            } else if (currentWave >= 5 && currentWave <= 8) {
+                const waveDef = WAVE_DEFS[currentWave - 1];
+                const waveMaxOnScreen = WAVE_MAX_ON_SCREEN[currentWave] || maxEnemiesOnScreen;
+                
+                if (wavePause > 0) {
+                    const currentWaveGap = WAVE_GAP_BY_WAVE[currentWave] || WAVE_GAP;
+                    if (currentTime - wavePause >= currentWaveGap) {
+                        wavePause = 0;
+                        lastEnemySpawnTime = currentTime;
+                    }
+                } else if (waveBurstIndex < waveDef.bursts.length) {
+                    const burst = waveDef.bursts[waveBurstIndex];
+                    if (burstSpawned < burst.count) {
+                        if (enemies.length < waveMaxOnScreen && currentTime - lastEnemySpawnTime >= burstDelay) {
+                            const pos = getEdgeSpawnPos();
+                            const type = burst.types[burstSpawned % burst.types.length];
+                            enemies.push(new Enemy(pos.x, pos.y, false, type));
+                            burstSpawned++;
+                            lastEnemySpawnTime = currentTime;
+                        }
+                    } else if (currentTime - lastEnemySpawnTime >= burst.delay) {
+                        waveBurstIndex++;
+                        burstSpawned = 0;
+                    }
+                } else {
+                    currentWave++;
+                    waveBurstIndex = 0;
+                    burstSpawned = 0;
+                    if (currentWave <= 8) {
+                        wavePause = currentTime;
+                    }
+                }
             } else if (currentWave === 9 && !goldCrownDefeated && !goldCrownPhase) {
                 // After wave 8: Gold Crown boss
                 if (enemies.length === 0) {
@@ -2645,11 +2733,13 @@
                     }
                 }
             } else if (goldCrownPhase) {
-                // Trickle red minions during Gold Crown fight
+                // Trickle Gold Crown minions (2404 + 5609) during fight
                 const crownAliveTime = (currentTime - (goldCrownSpawnTime || currentTime)) / 1000;
-                if (crownAliveTime > 3 && currentTime - lastEnemySpawnTime >= 2500 && enemies.length < 8) {
+                if (crownAliveTime > 3 && currentTime - lastEnemySpawnTime >= 2200 && enemies.length < 8) {
                     const pos = getEdgeSpawnPos();
-                    enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
+                    // Alternate between the two minion types
+                    const minionType = Math.random() < 0.5 ? 'goldMinion1' : 'goldMinion2';
+                    enemies.push(new Enemy(pos.x, pos.y, false, minionType));
                     lastEnemySpawnTime = currentTime;
                 }
             } else if (goldCrownDefeated) {
@@ -2748,18 +2838,9 @@
                             killCount++;
                             onEnemyKill(enemy.tier);
                             
-                            // Crown freeze effect — freeze all on-screen enemies briefly on kill
+                            // Crown freeze — no spawning during freeze, timer managed globally
                             if (playerBuffs.crown > 0) {
-                                enemies.forEach(e => {
-                                    if (e !== enemy && !e.frozen) {
-                                        e.frozenTimer = (e.frozenTimer || 0) + 45; // ~0.75 seconds frozen
-                                    }
-                                });
-                                playerBuffs.crown--;
-                                if (playerBuffs.crown <= 0) {
-                                    playerBuffs.crown = 0;
-                                    playSound('powerup-expire');
-                                }
+                                // Nothing per-kill — freeze is global 4s timer set on collect
                             }
                             // Duck buff: decrement on kill
                             if (playerBuffs.duck > 0 && proj.isDuck) {
@@ -2802,10 +2883,10 @@
                                 screenShake = 10;
                                 playSound('red-king-death'); // reuse boss death sound
                                 
-                                // Pop all red minions
+                                // Pop all minions
                                 enemies.forEach(e => {
-                                    if (e.isRedMinion) {
-                                        spawnPixelDeath(e.x, e.y, '#cc0000');
+                                    if (e.isRedMinion || e.isGoldMinion1 || e.isGoldMinion2) {
+                                        spawnPixelDeath(e.x, e.y, e.favoriteColor || '#cc0000');
                                         e.health = 0;
                                     }
                                 });
@@ -2870,12 +2951,17 @@
                             hitPause = 3; // 3-frame freeze on kill for impact
                             screenShake = Math.max(screenShake, 2); // subtle shake on every kill
                             
-                            // Power-up drop: ~12% per kill, but not during intro and not before 10s
-                            // Drop ~once every 12 kills, not during intro or active power-up
+                            // Power-up drop: ~8% per kill, but not during intro and not before 10s
+                            // Tiny crown is gated until AFTER Red King and is slightly rarer than the other items
                             const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || playerBuffs.crown > 0 || rainbowActive;
                             if (!anyBuffActive && currentWave > 1 && gameTime > 10 && Math.random() < 0.08) {
-                                const dropTypes = ['duck', 'skully', 'chromie', 'crown'];
-                                const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
+                                let dropType;
+                                const normalDropTypes = ['duck', 'skully', 'chromie'];
+                                if (redKingDefeated && Math.random() < 0.18) {
+                                    dropType = 'crown';
+                                } else {
+                                    dropType = normalDropTypes[Math.floor(Math.random() * normalDropTypes.length)];
+                                }
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
                             }
