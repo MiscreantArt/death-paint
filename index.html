@@ -2300,22 +2300,23 @@
         let waveQueue = null;
         const WAVE_SIZE = 10;
         // Spawn intervals per wave (ms between enemies)
-        const WAVE_INTERVALS = [2000, 1600, 1300, 1000, 1400, 1200, 1000, 900];
+        const WAVE_INTERVALS = [2000, 1600, 1300, 1000, 900, 1400, 1200, 1000, 900];
         let wavePause = 0; // ms timestamp when wave gap started
         const WAVE_GAP = 3500; // Default 3.5s breather between waves
         const WAVE_GAP_BY_WAVE = {
             3: 2800, // Wave 2 -> 3 a little snappier
             4: 4200, // Slightly longer breath before wave 4
-            5: 500,  // Very short — breathing room after Red King already provided the pause
-            6: 2400,
-            7: 2200,
-            8: 2200
+            5: 3500, // Normal gap before wave 5
+            6: 500,  // Very short — breathing room after Red King already provided the pause
+            7: 2400,
+            8: 2200,
+            9: 2200
         };
         const WAVE_MAX_ON_SCREEN = {
-            5: 5,
-            6: 6,
-            7: 8,
-            8: 10
+            6: 5,
+            7: 6,
+            8: 8,
+            9: 10
         };
         let firstFiveSpawned = 0; // first 5 grunts are solo (one at a time)
         
@@ -2365,7 +2366,14 @@
                 { count: 3, types: ['green', 'whiteBoss', 'darkBoss'], delay: 3000 },
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 3000 },
             ]},
-            // === POST-RED KING WAVES (5-8) — stricter escalation into Gold Crown ===
+            // Wave 5: quints, all types, 4 groups of 5 = 20 total — final push before Red King
+            { bursts: [
+                { count: 5, types: ['grunt', 'green', 'whiteBoss', 'darkBoss', 'grunt'], delay: 3000 },
+                { count: 5, types: ['darkBoss', 'grunt', 'green', 'whiteBoss', 'green'], delay: 3000 },
+                { count: 5, types: ['whiteBoss', 'darkBoss', 'grunt', 'green', 'darkBoss'], delay: 3000 },
+                { count: 5, types: ['grunt', 'whiteBoss', 'darkBoss', 'green', 'whiteBoss'], delay: 3000 },
+            ]},
+            // === POST-RED KING WAVES (6-9) — stricter escalation into Gold Crown ===
             // Wave 5: 15 total, still readable, no bombers yet
             { bursts: [
                 { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 2400 },
@@ -2628,7 +2636,7 @@
                     firstFiveSpawned++;
                     lastEnemySpawnTime = currentTime;
                 }
-            } else if (currentWave <= 4) {
+            } else if (currentWave <= 5) {
                 const waveDef = WAVE_DEFS[currentWave - 1];
                 
                 if (wavePause > 0) {
@@ -2655,13 +2663,13 @@
                     currentWave++;
                     waveBurstIndex = 0;
                     burstSpawned = 0;
-                    // Wave 4 -> Red King handles its own pause
-                    if (currentWave <= 4) {
+                    // Wave 5 -> Red King handles its own pause
+                    if (currentWave <= 5) {
                         wavePause = currentTime;
                     }
                 }
-            } else if (currentWave === 5 && !redKingDefeated && !redKingPhase) {
-                // Wait for all enemies to die after wave 4, then pause before Red King
+            } else if (currentWave === 6 && !redKingDefeated && !redKingPhase) {
+                // Wait for all enemies to die after wave 5, then pause before Red King
                 if (enemies.length === 0) {
                     if (!redKingPauseTime) {
                         redKingPauseTime = currentTime;
@@ -2682,8 +2690,8 @@
                     enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
                     lastEnemySpawnTime = currentTime;
                 }
-            } else if (redKingDefeated && currentWave === 5 && wavePause === 0) {
-                // Post-Red King: 3.5s breathing room then start waves 5-8
+            } else if (redKingDefeated && currentWave === 6 && wavePause === 0) {
+                // Post-Red King: 3.5s breathing room then start waves 6-9
                 // Don't return — just skip spawning so rest of game still runs
                 if (Date.now() - redKingPauseTime < 3500) { /* breathing room — no spawns but game keeps running */ }
                 else if (Date.now() < haloResumePauseUntil) { /* halo revive grace */ }
@@ -2692,7 +2700,7 @@
                     // Wave 5 gap is short since breathing room already happened
                     wavePause = Date.now();
                 }
-            } else if (currentWave >= 5 && currentWave <= 8) {
+            } else if (currentWave >= 6 && currentWave <= 9) {
                 const waveDef = WAVE_DEFS[currentWave - 1];
                 const waveMaxOnScreen = WAVE_MAX_ON_SCREEN[currentWave] || maxEnemiesOnScreen;
                 
@@ -2720,12 +2728,12 @@
                     currentWave++;
                     waveBurstIndex = 0;
                     burstSpawned = 0;
-                    if (currentWave <= 8) {
+                    if (currentWave <= 9) {
                         wavePause = currentTime;
                     }
                 }
-            } else if (currentWave === 9 && !goldCrownDefeated && !goldCrownPhase) {
-                // After wave 8: Gold Crown boss
+            } else if (currentWave === 10 && !goldCrownDefeated && !goldCrownPhase) {
+                // After wave 9: Gold Crown boss
                 if (enemies.length === 0) {
                     if (!goldCrownPauseTime) {
                         goldCrownPauseTime = currentTime;
