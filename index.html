@@ -706,6 +706,7 @@
             { type: 'chromie', birdId: 12, color: '#ff00ff', duration: 0 },    // Rainbow trail + shockwave sound
             { type: 'duck', birdId: 5568, color: '#ffdd00', duration: 5, killBased: true },    // Duck — 5 kills
             { type: 'skully', birdId: 8677, color: '#888888', duration: 10000 },  // Death touch - melee kills, but vulnerable to shots
+            { type: 'crown', birdId: 5602, color: '#ffd700', duration: 5, killBased: true },  // Freeze — 5 kills
             { type: 'halo', birdId: 6295, color: '#ffd700', duration: 0 }  // Extra life
         ];
         
@@ -713,6 +714,7 @@
         let playerBuffs = {
             duck: 0,     // Cosmetic duck noises
             skully: 0,   // Next N kills explode black
+            crown: 0,    // Freeze effect on kills
             halo: false  // Player has a stored halo (extra life)
         };
         
@@ -736,7 +738,7 @@
             allLoads.push(new Promise(r => { sprites.heroSheet.onload = r; sprites.heroSheet.onerror = r; }));
             
             // ALL enemy sheets — wait for them
-            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164, 6295];
+            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164, 6295, 5602];
             enemyIds.forEach(id => {
                 const img = new Image();
                 img.src = `sheets/${id}.png`;
@@ -760,7 +762,7 @@
             allLoads.push(new Promise(r => { sprites.chromieIcon.onload = r; sprites.chromieIcon.onerror = r; }));
             
             // Power-up icons
-            [sprites.powerUps.duck, sprites.powerUps.chromie, sprites.powerUps.skully, sprites.powerUps.halo].forEach(img => {
+            [sprites.powerUps.duck, sprites.powerUps.chromie, sprites.powerUps.skully, sprites.powerUps.crown, sprites.powerUps.halo].forEach(img => {
                 if (img && img.src) allLoads.push(new Promise(r => { img.onload = r; img.onerror = r; }));
             });
             
@@ -797,7 +799,7 @@
         
         // Power-up bird map for hero sprite swapping
         const powerUpBirdMap = {
-            'duck': 5568, 'skully': 8677, 'chromie': 12
+            'duck': 5568, 'skully': 8677, 'chromie': 12, 'crown': 5602
         };
         
         // Load power-up icons
@@ -807,6 +809,8 @@
         sprites.powerUps.chromie.src = 'assets/powerup-chromie.png';
         sprites.powerUps.skully = new Image();
         sprites.powerUps.skully.src = 'assets/powerup-skully.png';
+        sprites.powerUps.crown = new Image();
+        sprites.powerUps.crown.src = 'assets/powerup-crown.png';
         sprites.powerUps.halo = new Image();
         sprites.powerUps.halo.src = 'assets/powerup-halo-v2.png';
         
@@ -1530,6 +1534,8 @@
                     forceEast = true;
                 } else if (playerBuffs.skully > 0 && sprites.powerUpBirdSheets.skully && sprites.powerUpBirdSheets.skully.complete) {
                     spriteSheet = sprites.powerUpBirdSheets.skully;
+                } else if (playerBuffs.crown > 0 && sprites.powerUpBirdSheets.crown && sprites.powerUpBirdSheets.crown.complete) {
+                    spriteSheet = sprites.powerUpBirdSheets.crown;
                 } else if (playerBuffs.duck > 0 && sprites.powerUpBirdSheets.duck && sprites.powerUpBirdSheets.duck.complete) {
                     spriteSheet = sprites.powerUpBirdSheets.duck;
                 }
@@ -1637,6 +1643,17 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isRedKing = true;
+                } else if (forceType === 'goldCrown') {
+                    // Gold Crown Boss — appears during free-for-all
+                    this.spriteId = 5602;
+                    this.health = 50;
+                    this.speed = 1.1;
+                    this.tier = 4;
+                    this.size = 80;
+                    this.isBoss = true;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isGoldCrown = true;
                 } else if (forceType === 'redMinion') {
                     // Red Minion — indestructible bomber, explodes after 4 seconds
                     this.spriteId = 2164;
@@ -1676,6 +1693,7 @@
                 this.hitFlash = 0; // Hit flash effect
                 this.knockbackX = 0; // Knockback velocity X
                 this.knockbackY = 0; // Knockback velocity Y
+                this.frozenTimer = 0; // Freeze timer for crown power-up
             }
             
             update() {
@@ -1693,6 +1711,12 @@
                 if (this.hitFlash > 0) {
                     this.hitFlash -= frameDt * 60;
                     if (this.hitFlash < 0) this.hitFlash = 0;
+                }
+                
+                // Frozen timer handling
+                if (this.frozenTimer > 0) {
+                    this.frozenTimer -= frameDt * 60;
+                    return; // Skip movement while frozen
                 }
                 
                 // Tutorial step 3: run straight across, don't chase player
@@ -1850,6 +1874,13 @@
                 // Subtle white glow so character pops over painted canvas
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = 'rgba(255,255,255,0.7)';
+                
+                // Frozen visual effect
+                if (this.frozenTimer > 0) {
+                    ctx.globalAlpha = 0.6; // Dim when frozen
+                    ctx.shadowColor = 'rgba(100,200,255,0.5)';
+                    ctx.shadowBlur = 10;
+                }
                 
                 // Hit flash effect (not for red minions — they're indestructible, no flash needed)
                 if (this.hitFlash > 0 && !this.isRedMinion) {
@@ -2088,6 +2119,7 @@
                 if (this.type !== 'halo') {
                     playerBuffs.duck = 0;
                     playerBuffs.skully = 0;
+                    playerBuffs.crown = 0;
                     rainbowActive = false;
                     rainbowTimer = 0;
                 }
@@ -2112,6 +2144,12 @@
                         playSound('skully-activate');
                         haptic([30, 15, 30]);
                         playerBuffs.skully = 5; // Kill count, not time
+                        break;
+                    case 'crown':
+                        // Freeze nearby enemies briefly on each kill
+                        playSound('chromie-shockwave');
+                        haptic([20, 10, 20]);
+                        playerBuffs.crown = powerUp.duration;
                         break;
                     case 'halo':
                         // Extra life — store it, don't use immediately
@@ -2239,6 +2277,13 @@
         let redKingDefeated = false;
         let redKingPauseTime = 0;
         let redKingSpawnTime = 0;
+        
+        // Gold Crown boss phase
+        let goldCrownPhase = false;
+        let goldCrownDefeated = false;
+        let goldCrownPauseTime = 0;
+        let goldCrownSpawnTime = 0;
+        let goldCrownKillThreshold = 50;
         // Wave definitions — each wave is an array of "bursts"
         // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
         const WAVE_DEFS = [
@@ -2548,9 +2593,40 @@
                     lastEnemySpawnTime = currentTime;
                 }
             } else if (redKingDefeated) {
+                // Gold Crown boss trigger — spawns at kill threshold during free-for-all
+                if (!goldCrownDefeated && !goldCrownPhase && killCount >= goldCrownKillThreshold) {
+                    if (enemies.length === 0) {
+                        if (!goldCrownPauseTime) {
+                            goldCrownPauseTime = currentTime;
+                        } else if (currentTime - goldCrownPauseTime >= 4000) {
+                            goldCrownPhase = true;
+                            goldCrownSpawnTime = currentTime;
+                            const pos = getEdgeSpawnPos();
+                            enemies.push(new Enemy(pos.x, pos.y, false, 'goldCrown'));
+                            lastEnemySpawnTime = currentTime;
+                            playSound('red-king-enter'); // reuse boss entrance sound
+                        }
+                    }
+                    return; // Don't spawn normal enemies while waiting for Gold Crown
+                }
+                
+                if (goldCrownPhase) {
+                    // Trickle red minions during Gold Crown fight (same as Red King)
+                    const crownAliveTime = (currentTime - (goldCrownSpawnTime || currentTime)) / 1000;
+                    if (crownAliveTime > 3 && currentTime - lastEnemySpawnTime >= 2500 && enemies.length < 8) {
+                        const pos = getEdgeSpawnPos();
+                        enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
+                        lastEnemySpawnTime = currentTime;
+                    }
+                    return; // Don't spawn normal enemies during Gold Crown fight
+                }
+                
                 // Free-for-all: steady ramp (after Red King defeat pause)
                 if (Date.now() - redKingPauseTime < 3500) return; // 3.5s pause to breathe + grab halo
                 if (Date.now() < haloResumePauseUntil) return; // extra grace after the epic halo revive
+                
+                // Post-Gold Crown free-for-all
+                if (goldCrownDefeated && Date.now() - goldCrownPauseTime < 3500) return;
                 
                 const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
                 
@@ -2644,6 +2720,20 @@
                             score += points;
                             killCount++;
                             onEnemyKill(enemy.tier);
+                            
+                            // Crown freeze effect — freeze all on-screen enemies briefly on kill
+                            if (playerBuffs.crown > 0) {
+                                enemies.forEach(e => {
+                                    if (e !== enemy && !e.frozen) {
+                                        e.frozenTimer = (e.frozenTimer || 0) + 45; // ~0.75 seconds frozen
+                                    }
+                                });
+                                playerBuffs.crown--;
+                                if (playerBuffs.crown <= 0) {
+                                    playerBuffs.crown = 0;
+                                    playSound('powerup-expire');
+                                }
+                            }
                             // Duck buff: decrement on kill
                             if (playerBuffs.duck > 0 && proj.isDuck) {
                                 playerBuffs.duck--;
@@ -2677,6 +2767,30 @@
                                 }
                             }
                             
+                            // Gold Crown death
+                            if (enemy.isGoldCrown) {
+                                goldCrownPhase = false;
+                                goldCrownDefeated = true;
+                                goldCrownPauseTime = Date.now();
+                                screenShake = 10;
+                                playSound('red-king-death'); // reuse boss death sound
+                                
+                                // Pop all red minions
+                                enemies.forEach(e => {
+                                    if (e.isRedMinion) {
+                                        spawnPixelDeath(e.x, e.y, '#cc0000');
+                                        e.health = 0;
+                                    }
+                                });
+                                enemies = enemies.filter(e => e.health > 0);
+                                
+                                // Drop halo reward
+                                if (!hasHalo) {
+                                    powerUps.push(new PowerUp(enemy.x, enemy.y, 'halo'));
+                                    playSound('powerup-spawn');
+                                }
+                            }
+                            
                             // Death explosion — skully overrides all, then normal (duck recolors to yellow)
                             const isDuckKill = proj.isDuck;
                             const trailsBefore = fireTrails.length;
@@ -2688,6 +2802,22 @@
                                 spawnRedSplat(enemy.x, enemy.y);
                             } else if (enemy.isRedMinion) {
                                 spawnPixelDeath(enemy.x, enemy.y, '#cc0000');
+                            } else if (enemy.isGoldCrown) {
+                                // Gold explosion — use yellow/gold colors
+                                const goldColors = ['#ffd700', '#ffaa00', '#ff8800', '#ffcc33', '#fff200'];
+                                for (let i = 0; i < 150; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const speed = 5 + Math.random() * 18;
+                                    particles.push(new Particle(enemy.x, enemy.y, Math.cos(angle) * speed, Math.sin(angle) * speed, goldColors[Math.floor(Math.random() * goldColors.length)], 15 + Math.floor(Math.random() * 20), 0.5 + Math.random() * 1.2));
+                                }
+                                for (let i = 0; i < 300; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const dist = Math.random() * 120;
+                                    const t = new FireTrail(enemy.x + Math.cos(angle) * dist, enemy.y + Math.sin(angle) * dist);
+                                    t.size = 3.5 + Math.random() * 4;
+                                    t.color = goldColors[Math.floor(Math.random() * goldColors.length)];
+                                    fireTrails.push(t);
+                                }
                             } else if (enemy.isDarkBoss) {
                                 spawnDarkSplat(enemy.x, enemy.y);
                             } else if (enemy.isBoss) {
@@ -2715,9 +2845,9 @@
                             
                             // Power-up drop: ~12% per kill, but not during intro and not before 10s
                             // Drop ~once every 12 kills, not during intro or active power-up
-                            const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || rainbowActive;
+                            const anyBuffActive = playerBuffs.duck > 0 || playerBuffs.skully > 0 || playerBuffs.crown > 0 || rainbowActive;
                             if (!anyBuffActive && currentWave > 1 && gameTime > 10 && Math.random() < 0.08) {
-                                const dropTypes = ['duck', 'skully', 'chromie'];
+                                const dropTypes = ['duck', 'skully', 'chromie', 'crown'];
                                 const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
                                 powerUps.push(new PowerUp(enemy.x, enemy.y, dropType));
                                 playSound('powerup-spawn');
@@ -4368,7 +4498,8 @@
             // Reset buffs
             playerBuffs = {
                 duck: 0,
-                skully: 0
+                skully: 0,
+                crown: 0
             };
             
             // Reset touch controls
@@ -4386,6 +4517,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
             hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
 
@@ -4437,7 +4569,8 @@
             // Reset buffs
             playerBuffs = {
                 duck: 0,
-                skully: 0
+                skully: 0,
+                crown: 0
             };
             
             // Reset touch controls
@@ -4455,6 +4588,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
             hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
         
