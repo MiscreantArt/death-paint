@@ -1396,6 +1396,11 @@
             shoot(forceAngle = null) {
                 // Use forced angle (mobile auto-fire) or mouse position (desktop)
                 const angle = forceAngle !== null ? forceAngle : Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                
+                // Always face the actual shot direction — this is the final truth
+                const shotDir = this.getCardinalDirection(Math.cos(angle), Math.sin(angle));
+                this.currentDirection = shotDir;
+                this.lastAimDirection = shotDir;
 
                 const damage = 1;
                 
