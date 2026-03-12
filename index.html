@@ -1379,20 +1379,18 @@
             }
             
             // Helper method to determine cardinal direction from a vector
-            // Diagonal favors east/west; north/south only when vertical is clearly dominant
+            // Any diagonal aim should bias east/west so the bird reads clearly
             getCardinalDirection(dx, dy) {
                 const absDx = Math.abs(dx);
                 const absDy = Math.abs(dy);
                 
-                if (absDy > absDx * 2) {
-                    // Strongly vertical — use north/south
-                    return dy < 0 ? 'north' : 'south';
-                } else if (absDx > 0.01) {
-                    // Any meaningful horizontal component — use east/west
+                if (absDx > 0.01 && absDy > 0.01) {
                     return dx > 0 ? 'east' : 'west';
-                } else {
-                    return dy < 0 ? 'north' : 'south';
                 }
+                if (absDx > 0.01) {
+                    return dx > 0 ? 'east' : 'west';
+                }
+                return dy < 0 ? 'north' : 'south';
             }
             
             shoot(forceAngle = null) {
@@ -2341,10 +2339,10 @@
             if (gameState === 'haloRevive') {
                 const elapsed = Date.now() - haloReviveTime;
                 const targetY = canvas.height / 2;
-                const floatDuration = 1800;
+                const floatDuration = 2600;
                 const landHoldDuration = 1000;
                 const transformAt = floatDuration + landHoldDuration;
-                const resumeAt = 5200;
+                const resumeAt = 6000;
                 
                 if (haloReviveCueStage === 0) {
                     playSound('halo-revive');
@@ -3263,8 +3261,8 @@
                 const elapsed = Date.now() - haloReviveTime;
                 const centerX = canvas.width / 2;
                 const centerY = canvas.height / 2;
-                const floatDuration = 1800;
-                const transformAt = 2800;
+                const floatDuration = 2600;
+                const transformAt = 3600;
                 const haloPulse = 0.85 + Math.sin(elapsed / 120) * 0.15;
                 
                 ctx.save();
@@ -3275,24 +3273,14 @@
                 ctx.fill();
                 ctx.restore();
                 
-                // Draw the halo hero floating down, then landing dead center
+                // Draw the halo hero floating down like a feather, then resting dead center
                 if (elapsed < transformAt) {
+                    const swayX = Math.sin(elapsed / 260) * 14;
+                    const driftX = Math.sin(elapsed / 520) * 6;
+                    const heroX = elapsed <= floatDuration ? centerX + swayX + driftX : centerX;
                     const heroY = elapsed <= floatDuration ? haloHeroY : centerY;
                     if (sprites.haloSheet && sprites.haloSheet.complete) {
-                        drawSprite(sprites.haloSheet, 'south', 'idle', Math.floor(elapsed / 120) % 4, centerX, heroY, player.size * 1.08);
-                    }
-                    
-                    // Big halo aura while resting in the center
-                    if (elapsed >= floatDuration) {
-                        ctx.save();
-                        ctx.strokeStyle = 'rgba(255, 235, 140, 0.9)';
-                        ctx.lineWidth = 3;
-                        ctx.shadowBlur = 18;
-                        ctx.shadowColor = '#ffec8a';
-                        ctx.beginPath();
-                        ctx.arc(centerX, centerY - player.size * 1.15, player.size * 0.62 + Math.sin(elapsed / 80) * 2, 0, Math.PI * 2);
-                        ctx.stroke();
-                        ctx.restore();
+                        drawSprite(sprites.haloSheet, 'south', 'idle', Math.floor(elapsed / 140) % 4, heroX, heroY, player.size * 1.08);
                     }
                 } else {
                     // After the flash, show the normal hero back in the center
@@ -3886,9 +3874,9 @@
             if (hasHalo) {
                 const haloIcon = sprites.powerUps.halo;
                 if (haloIcon && haloIcon.complete && haloIcon.naturalWidth > 0) {
-                    const iconSize = 62;
-                    const iconX = hangX + hangW + 4;
-                    const iconY = btnY2 + (btnH - iconSize) / 2 - 10;
+                    const iconSize = 78;
+                    const iconX = hangX + hangW + 2;
+                    const iconY = btnY2 + (btnH - iconSize) / 2 - 18;
                     ctx.globalAlpha = 0.9;
                     try {
                         ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
