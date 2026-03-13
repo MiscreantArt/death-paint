@@ -1962,8 +1962,8 @@
                 // No knockback when frozen (crown freeze = completely stuck)
                 if (projectileAngle !== null && this.frozenTimer <= 0) {
                     let knockbackForce = this.isRedMinion ? 15 : 8;
-                    // Big bosses (Red King, Gold King) have minimal knockback
-                    if (this.isRedKing || this.isGoldCrown) knockbackForce = 2;
+                    // Gold King barely budges
+                    if (this.isGoldCrown) knockbackForce = 2;
                     this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
                     this.knockbackY = Math.sin(projectileAngle) * knockbackForce;
                 }
