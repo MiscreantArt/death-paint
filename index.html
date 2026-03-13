@@ -1542,8 +1542,7 @@
                     forceEast = true;
                 } else if (playerBuffs.skully > 0 && sprites.powerUpBirdSheets.skully && sprites.powerUpBirdSheets.skully.complete) {
                     spriteSheet = sprites.powerUpBirdSheets.skully;
-                } else if (playerBuffs.crown > 0 && sprites.powerUpBirdSheets.crown && sprites.powerUpBirdSheets.crown.complete) {
-                    spriteSheet = sprites.powerUpBirdSheets.crown;
+                // Crown does NOT swap hero sprite — it's a freeze effect, not a costume
                 } else if (playerBuffs.duck > 0 && sprites.powerUpBirdSheets.duck && sprites.powerUpBirdSheets.duck.complete) {
                     spriteSheet = sprites.powerUpBirdSheets.duck;
                 }
@@ -1757,14 +1756,25 @@
                 // Frozen timer handling
                 if (this.frozenTimer > 0) {
                     this.frozenTimer -= frameDt * 60;
-                    // Walk animation continues (walking in place) but no movement
+                    // Walk animation continues (walking in place) facing the hero
                     this.animTimer += frameDt * 60;
                     if (this.animTimer >= 8) { this.animTimer = 0; this.animFrame = (this.animFrame + 1) % 6; }
+                    // Face the player while frozen
+                    const fdx = player.x - this.x;
+                    const fdy = player.y - this.y;
+                    if (Math.abs(fdx) > Math.abs(fdy)) {
+                        this.currentDirection = fdx > 0 ? 'east' : 'west';
+                    } else {
+                        this.currentDirection = fdy > 0 ? 'south' : 'north';
+                    }
+                    // Kill any residual knockback
+                    this.knockbackX = 0;
+                    this.knockbackY = 0;
                     // When crown freeze ends, remove bomber vulnerability
                     if (this.frozenTimer <= 0 && this.crownVulnerable) {
                         this.crownVulnerable = false;
                     }
-                    return; // Skip movement
+                    return; // Skip movement — completely stuck
                 }
                 
                 // Spawn flash — blink on/off when emerging from boss
@@ -1948,9 +1958,12 @@
                 // Hit flash effect
                 this.hitFlash = 3;
                 
-                // Knockback from projectile — red minions bounce back hard
-                if (projectileAngle !== null) {
-                    const knockbackForce = this.isRedMinion ? 15 : 8;
+                // Knockback from projectile — red minions bounce back hard, bosses barely budge
+                // No knockback when frozen (crown freeze = completely stuck)
+                if (projectileAngle !== null && this.frozenTimer <= 0) {
+                    let knockbackForce = this.isRedMinion ? 15 : 8;
+                    // Big bosses (Red King, Gold King) have minimal knockback
+                    if (this.isRedKing || this.isGoldCrown) knockbackForce = 2;
                     this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
                     this.knockbackY = Math.sin(projectileAngle) * knockbackForce;
                 }
@@ -2014,11 +2027,10 @@
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = 'rgba(255,255,255,0.7)';
                 
-                // Frozen visual effect
+                // Frozen visual effect — full opacity, just a subtle blue tint
                 if (this.frozenTimer > 0) {
-                    ctx.globalAlpha = 0.6; // Dim when frozen
-                    ctx.shadowColor = 'rgba(100,200,255,0.5)';
-                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = 'rgba(100,200,255,0.4)';
+                    ctx.shadowBlur = 8;
                 }
                 
                 // Hit flash effect (not for red minions — they're indestructible, no flash needed)
