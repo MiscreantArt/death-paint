@@ -4527,10 +4527,13 @@
         function handleTouchStart(e) {
             e.preventDefault();
             initAudio();
+            // iOS: ensure AudioContext is running on any user interaction
+            if (audioCtx && audioCtx.state !== 'running') {
+                audioCtx.resume().catch(err => console.warn('AudioContext resume failed:', err));
+            }
             // Force music if it should be playing but isn't
             if (gameState === 'playing' && (!bgMusic || !bgMusic.source)) {
-                if (audioCtx) {
-                    if (audioCtx.state !== 'running') audioCtx.resume();
+                if (audioCtx && audioCtx.state === 'running') {
                     if (!bgMusicBuffer) prepareMusic();
                     startMusic();
                 }
