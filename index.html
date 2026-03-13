@@ -545,6 +545,11 @@
                 synthTone(330, 0.5, 0.08, 'triangle', 1320);
                 haptic([20, 10, 20, 10, 40]);
             },
+            'enemy-shoot': () => {
+                // Soft laser pew — mid-pitched with slight descending swoosh
+                synthTone(480, 0.12, 0.08, 'sine', 320);
+                synthNoise(0.04, 0.05, 2000);
+            },
 
             'duck-quack': () => {
                 if (soundDefs._quackBuffer && audioCtx) {
@@ -746,7 +751,7 @@
             allLoads.push(new Promise(r => { sprites.heroSheet.onload = r; sprites.heroSheet.onerror = r; }));
             
             // ALL enemy sheets — wait for them
-            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164, 6295, 5602, 2404, 5609];
+            const enemyIds = [3372, 5463, 7473, 9638, 668, 3047, 2941, 8959, 2080, 3904, 8398, 5249, 6949, 1729, 2290, 5715, 1320, 2642, 4089, 2950, 2164, 6295, 5602, 2404, 5609, 9651, 2990, 4936];
             enemyIds.forEach(id => {
                 const img = new Image();
                 img.src = `sheets/${id}.png`;
@@ -1707,6 +1712,53 @@
                     this.isGoldMinion2 = true;
                     this.splitTimer = 180; // 3 seconds at 60fps — splits into 2x goldMinion1
                     this.splitWarning = false;
+                } else if (forceType === 'robotGirl') {
+                    // Robot Girl Boss (#9651) — final boss, stays at top, laser attacks
+                    this.spriteId = 9651;
+                    this.health = 80;
+                    this.speed = 0.5; // Very slow, only moves left/right at top
+                    this.tier = 4;
+                    this.size = 80;
+                    this.isBoss = true;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isRobotGirl = true;
+                    this.minionSpawnTimer = 360; // 6 seconds at 60fps
+                    this.shakeTimer = 0;
+                    this.laserChargeTimer = 0;
+                    this.laserActiveTimer = 0;
+                    this.laserX = 0; // Laser beam X position
+                    this.laserSweepDir = 1; // 1 = right, -1 = left
+                } else if (forceType === 'robotMinion1') {
+                    // Robot Minion 1 (#2990) — silver robot with spin-shoot cycle
+                    this.spriteId = 2990;
+                    this.favoriteColor = '#c0c0c0';
+                    this.health = 8;
+                    this.speed = 1.2;
+                    this.tier = 3;
+                    this.size = 44;
+                    this.isBoss = false;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isRobotMinion1 = true;
+                    this.behaviorTimer = 0;
+                    this.behaviorState = 'walk'; // walk -> pause -> spin -> aim -> shoot
+                    this.spinFrame = 0;
+                } else if (forceType === 'robotMinion2') {
+                    // Robot Minion 2 (#4936) — silver robot with spin-shoot cycle
+                    this.spriteId = 4936;
+                    this.favoriteColor = '#d4d4d4';
+                    this.health = 5;
+                    this.speed = 1.5;
+                    this.tier = 2;
+                    this.size = 38;
+                    this.isBoss = false;
+                    this.isDarkBoss = false;
+                    this.isGreen = false;
+                    this.isRobotMinion2 = true;
+                    this.behaviorTimer = 0;
+                    this.behaviorState = 'walk'; // walk -> pause -> spin -> aim -> shoot
+                    this.spinFrame = 0;
                 } else {
                     // Dark purple bosses — BIG, splatter mostly black/psychedelic
                     const darkBosses = [6949, 1729, 2290];
@@ -1846,7 +1898,178 @@
                         }
                     }
                 }
-                
+
+                // Robot Girl boss: stays at top, moves left/right, spawns minions, fires laser
+                if (this.isRobotGirl) {
+                    // Stay at top of screen (y = 100-120)
+                    const targetY = 110;
+                    if (Math.abs(this.y - targetY) > 2) {
+                        this.y += (targetY - this.y) * 0.1 * frameDt * 60;
+                    }
+                    // Slow horizontal movement
+                    this.x += this.speed * Math.sin(Date.now() / 1000) * frameDt * 60;
+                    // Clamp to screen bounds
+                    if (this.x < 80) this.x = 80;
+                    if (this.x > canvas.width - 80) this.x = canvas.width - 80;
+
+                    // Spawn minions every 6 seconds
+                    this.minionSpawnTimer -= frameDt * 60;
+                    if (this.minionSpawnTimer <= 20 && this.minionSpawnTimer > 0) {
+                        this.shakeTimer = this.minionSpawnTimer;
+                    }
+                    if (this.minionSpawnTimer <= 0) {
+                        this.shakeTimer = 0;
+                        this.minionSpawnTimer = 360; // Reset 6s timer
+                        if (enemies.length < 20) {
+                            const m1 = new Enemy(this.x - 40, this.y, false, 'robotMinion1');
+                            m1.spawnFlash = 30;
+                            const m2 = new Enemy(this.x + 40, this.y, false, 'robotMinion2');
+                            m2.spawnFlash = 30;
+                            enemies.push(m1, m2);
+                            // Silver/purple spray particles
+                            const colors = ['#c0c0c0', '#d4d4d4', '#9933ff'];
+                            for (let i = 0; i < 20; i++) {
+                                const a = Math.random() * Math.PI * 2;
+                                particles.push(new Particle(this.x + Math.cos(a) * 15, this.y + Math.sin(a) * 15, Math.cos(a) * (2 + Math.random() * 3), Math.sin(a) * (2 + Math.random() * 3), colors[Math.floor(Math.random() * colors.length)], 8 + Math.floor(Math.random() * 10), 1 + Math.random()));
+                            }
+                            playSound('chromie-shockwave');
+                        }
+                    }
+
+                    // Laser attack cycle: charge 1s, then fire 2s laser
+                    if (this.laserActiveTimer > 0) {
+                        // Laser is firing
+                        this.laserActiveTimer -= frameDt * 60;
+                        // Sweep laser slowly left or right
+                        this.laserX += this.laserSweepDir * 1.2 * frameDt * 60;
+                        // Reverse direction at edges
+                        if (this.laserX < 20 || this.laserX > canvas.width - 20) {
+                            this.laserSweepDir *= -1;
+                        }
+                        // Leave purple paint on canvas
+                        if (Math.random() < 0.4) {
+                            const t = new FireTrail(this.laserX + (Math.random() - 0.5) * 30, this.y + 50 + Math.random() * (canvas.height - this.y - 50));
+                            t.size = 2 + Math.random() * 3;
+                            t.color = Math.random() < 0.5 ? '#9933ff' : '#cc66ff';
+                            fireTrails.push(t);
+                        }
+                        // Damage player if they touch laser
+                        const laserWidth = 35;
+                        if (Math.abs(player.x - this.laserX) < laserWidth && player.y > this.y + 30) {
+                            if (Math.random() < 0.15) { // Damage per frame
+                                player.takeDamage(1);
+                            }
+                        }
+                        if (this.laserActiveTimer <= 0) {
+                            this.laserChargeTimer = 300; // 5 seconds until next laser
+                        }
+                    } else if (this.laserChargeTimer > 0) {
+                        // Charging next laser
+                        this.laserChargeTimer -= frameDt * 60;
+                        if (this.laserChargeTimer <= 60 && this.laserChargeTimer > 0) {
+                            // Warning shake and glow
+                            this.shakeTimer = Math.max(this.shakeTimer, this.laserChargeTimer / 60 * 3);
+                            if (Math.random() < 0.2) {
+                                particles.push(new Particle(this.x, this.y, 0, 2 + Math.random() * 3, '#9933ff', 8 + Math.floor(Math.random() * 8), 1 + Math.random()));
+                            }
+                        }
+                        if (this.laserChargeTimer <= 0) {
+                            // Fire laser!
+                            this.laserActiveTimer = 120; // 2 seconds
+                            this.laserX = this.x;
+                            this.laserSweepDir = Math.random() < 0.5 ? 1 : -1;
+                            playSound('chromie-shockwave');
+                            screenShake = 3;
+                        }
+                    } else {
+                        // Initialize first laser
+                        this.laserChargeTimer = 300;
+                    }
+
+                    // Face south
+                    this.currentDirection = 'south';
+                    this.animTime += frameDt * 60;
+                    if (Math.floor(this.animTime / 4) !== Math.floor((this.animTime - frameDt * 60) / 4)) {
+                        this.animFrame = (this.animFrame + 1) % 6;
+                    }
+                    return;
+                }
+
+                // Robot minions: walk-pause-spin-aim-shoot cycle
+                if (this.isRobotMinion1 || this.isRobotMinion2) {
+                    this.behaviorTimer += frameDt * 60;
+
+                    if (this.behaviorState === 'walk') {
+                        // Chase player normally
+                        const dx = player.x - this.x;
+                        const dy = player.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 0) {
+                            const finalSpeed = this.speed * enemySpeedMultiplier;
+                            this.x += (dx / dist) * finalSpeed * frameDt * 60;
+                            this.y += (dy / dist) * finalSpeed * frameDt * 60;
+                            this.currentDirection = this.getCardinalDirection(dx, dy);
+                        }
+                        if (this.behaviorTimer >= 120) { // 2 seconds
+                            this.behaviorState = 'pause';
+                            this.behaviorTimer = 0;
+                        }
+                    } else if (this.behaviorState === 'pause') {
+                        // Stop moving
+                        if (this.behaviorTimer >= 30) { // 0.5 seconds
+                            this.behaviorState = 'spin';
+                            this.behaviorTimer = 0;
+                            this.spinFrame = 0;
+                        }
+                    } else if (this.behaviorState === 'spin') {
+                        // Cycle through directions: east->south->west->north
+                        const dirs = ['east', 'south', 'west', 'north'];
+                        const cycleFrame = Math.floor(this.behaviorTimer / 8);
+                        this.currentDirection = dirs[cycleFrame % 4];
+                        if (this.behaviorTimer >= 90) { // 1.5 seconds (several full spins)
+                            this.behaviorState = 'aim';
+                            this.behaviorTimer = 0;
+                        }
+                    } else if (this.behaviorState === 'aim') {
+                        // Face player
+                        const dx = player.x - this.x;
+                        const dy = player.y - this.y;
+                        this.currentDirection = this.getCardinalDirection(dx, dy);
+                        if (this.behaviorTimer >= 18) { // 0.3 seconds
+                            this.behaviorState = 'shoot';
+                            this.behaviorTimer = 0;
+                            // Fire purple projectile
+                            const angle = Math.atan2(player.y - this.y, player.x - this.x);
+                            const proj = {
+                                x: this.x,
+                                y: this.y,
+                                vx: Math.cos(angle) * 7,
+                                vy: Math.sin(angle) * 7,
+                                size: 6,
+                                color: '#9933ff',
+                                isEnemy: true,
+                                damage: 1,
+                                life: 120, // Max distance
+                                trail: [] // Purple paint trail
+                            };
+                            projectiles.push(proj);
+                            playSound('enemy-shoot');
+                        }
+                    } else if (this.behaviorState === 'shoot') {
+                        // Brief pause after shooting
+                        if (this.behaviorTimer >= 10) {
+                            this.behaviorState = 'walk';
+                            this.behaviorTimer = 0;
+                        }
+                    }
+
+                    this.animTime += frameDt * 60;
+                    if (Math.floor(this.animTime / 4) !== Math.floor((this.animTime - frameDt * 60) / 4)) {
+                        this.animFrame = (this.animFrame + 1) % 6;
+                    }
+                    return;
+                }
+
                 // Tutorial step 3: run straight across, don't chase player
                 if (this.tutorialRunAcross) {
                     const finalSpeed = this.speed * enemySpeedMultiplier;
@@ -1962,8 +2185,8 @@
                 // No knockback when frozen (crown freeze = completely stuck)
                 if (projectileAngle !== null && this.frozenTimer <= 0) {
                     let knockbackForce = this.isRedMinion ? 15 : 8;
-                    // Gold King barely budges
-                    if (this.isGoldCrown) knockbackForce = 2;
+                    // Gold King and Robot Girl barely budge
+                    if (this.isGoldCrown || this.isRobotGirl) knockbackForce = 2;
                     this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
                     this.knockbackY = Math.sin(projectileAngle) * knockbackForce;
                 }
@@ -2087,10 +2310,43 @@
                     this.animFrame = (this.animFrame + 1) % 6;
                 }
                 this.bounce += 0.3 * frameDt * 60; // Bobbing motion
-                
-                return this.life <= 0 || 
+
+                // Enemy projectile collision with player
+                if (this.isEnemy) {
+                    const dx = this.x - player.x;
+                    const dy = this.y - player.y;
+                    if (dx * dx + dy * dy < (player.size * player.size)) {
+                        player.takeDamage(this.damage);
+                        // Purple paint drops on hit
+                        for (let i = 0; i < 5; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const dist = Math.random() * 20;
+                            const t = new FireTrail(this.x + Math.cos(angle) * dist, this.y + Math.sin(angle) * dist);
+                            t.size = 1 + Math.random() * 1.5;
+                            t.color = '#9933ff';
+                            fireTrails.push(t);
+                        }
+                        return true; // Remove projectile
+                    }
+                }
+
+                const expired = this.life <= 0 ||
                        this.x < 0 || this.x > canvas.width ||
                        this.y < 0 || this.y > canvas.height;
+
+                // Purple paint drops when projectile expires or hits edge
+                if (expired && this.isEnemy && this.color === '#9933ff') {
+                    for (let i = 0; i < 3; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = Math.random() * 15;
+                        const t = new FireTrail(this.x + Math.cos(angle) * dist, this.y + Math.sin(angle) * dist);
+                        t.size = 0.8 + Math.random() * 1.2;
+                        t.color = '#9933ff';
+                        fireTrails.push(t);
+                    }
+                }
+
+                return expired;
             }
             
             draw() {
@@ -2454,6 +2710,25 @@
         let goldCrownSpawnTime = 0;
         let goldCrownKillThreshold = 50;
         let postGoldCrownWavesStarted = false;
+
+        // Robot Girl boss phase
+        let robotGirlPhase = false;
+        let robotGirlDefeated = false;
+        let robotGirlPauseTime = 0;
+        let robotGirlSpawnTime = 0;
+
+        // Canvas coverage tracking
+        let coverageCanvas = null;
+        let coverageCtx = null;
+        let canvasCoverage = 0; // 0.0 to 1.0
+        let coverageCheckTimer = 0;
+
+        // Victory state
+        let victoryStartTime = 0;
+        let victoryDanceEnemies = [];
+        let victoryDanceReverse = false;
+        let victoryDanceLastReverse = 0;
+        let victoryDanceLastJump = 0;
         // Wave definitions — each wave is an array of "bursts"
         // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
         const WAVE_DEFS = [
@@ -2587,11 +2862,15 @@
             if (enemies.length >= maxEnemiesOnScreen) {
                 return;
             }
-            
+
             const pos = getEdgeSpawnPos();
-            
+
             // Late-game enemy mix for free-for-all
-            if (goldCrownDefeated && Math.random() < 0.12) {
+            if (robotGirlDefeated && Math.random() < 0.10) {
+                // 10% chance of robot minions after Robot Girl defeated
+                const robotType = Math.random() < 0.5 ? 'robotMinion1' : 'robotMinion2';
+                enemies.push(new Enemy(pos.x, pos.y, false, robotType));
+            } else if (goldCrownDefeated && Math.random() < 0.12) {
                 // 12% chance of gold minions (will split and create chaos)
                 const goldType = Math.random() < 0.5 ? 'goldMinion1' : 'goldMinion2';
                 enemies.push(new Enemy(pos.x, pos.y, false, goldType));
@@ -2614,6 +2893,7 @@
                 captureArt();
             }
             if (gameState === 'preroll') { updatePreroll(); return; }
+            if (gameState === 'victory') { updateVictory(); return; }
             if (gameState !== 'playing' && gameState !== 'dying' && gameState !== 'tutorial' && gameState !== 'haloRevive') return;
             if (gamePaused && (gameState === 'playing' || gameState === 'tutorial')) return;
             // Hit-pause: skip update frames for kill impact feel
@@ -2974,18 +3254,57 @@
                         wavePause = currentTime;
                     }
                 }
-            } else if (currentWave >= 16) {
-                // TODO: Final Boss Robot #9651 with minions #2990, #4936
-                // For now: free-for-all endless mode
-                const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
-                if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
-                    spawnSingleEnemy();
+            } else if (currentWave === 16 && !robotGirlDefeated && !robotGirlPhase) {
+                // After wave 15: Robot Girl boss
+                if (enemies.length === 0) {
+                    if (!robotGirlPauseTime) {
+                        robotGirlPauseTime = currentTime;
+                    } else if (currentTime - robotGirlPauseTime >= 4000) {
+                        robotGirlPhase = true;
+                        robotGirlSpawnTime = currentTime;
+                        // Robot Girl spawns at top center of screen
+                        enemies.push(new Enemy(canvas.width / 2, 110, false, 'robotGirl'));
+                        lastEnemySpawnTime = currentTime;
+                        playSound('red-king-enter');
+                    }
                 }
-                // Gradual difficulty — every 25s
-                if (Math.floor(gameTime / 25) > Math.floor((gameTime - 0.016) / 25)) {
-                    enemySpeedMultiplier += 0.05;
-                    playerSpeedBonus += 0.02;
-                    maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
+            } else if (robotGirlPhase) {
+                // Robot Girl spawns her own minions via minionSpawnTimer in her update() method
+                // No external trickle spawning needed
+            } else if (robotGirlDefeated || currentWave > 16) {
+                // After Robot Girl defeated: check for win condition or free-for-all
+                if (canvasCoverage >= 0.99 && gameState === 'playing') {
+                    // Victory! Trigger win condition
+                    gameState = 'victory';
+                    victoryStartTime = Date.now();
+                    stopMusic();
+                    playSound('chromie-shockwave');
+                    // Clear all enemies with NO paint
+                    enemies.forEach(e => {
+                        const silverColors = ['#c0c0c0', '#d4d4d4', '#a8a8a8', '#e0e0e0'];
+                        for (let i = 0; i < 30; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = 3 + Math.random() * 8;
+                            particles.push(new Particle(e.x, e.y, Math.cos(angle) * speed, Math.sin(angle) * speed, silverColors[Math.floor(Math.random() * silverColors.length)], 12 + Math.floor(Math.random() * 15), 0.8 + Math.random() * 1.2));
+                        }
+                    });
+                    enemies = [];
+                    victoryDanceEnemies = [];
+                    victoryDanceReverse = false;
+                    victoryDanceLastReverse = Date.now();
+                    victoryDanceLastJump = Date.now();
+                } else {
+                    // Free-for-all endless mode with robot minions
+                    const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
+                    if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
+                        spawnSingleEnemy();
+                    }
+                    // Gradual difficulty — every 25s
+                    if (Math.floor(gameTime / 25) > Math.floor((gameTime - 0.016) / 25)) {
+                        enemySpeedMultiplier += 0.05;
+                        playerSpeedBonus += 0.02;
+                        maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
+                    }
                 }
             }
             } catch(spawnErr) {
@@ -3160,8 +3479,51 @@
                                     fireTrails.push(t);
                                 }
                             } else if (enemy.isGoldMinion1) {
-                                // Gold minion 1 dies WHITE
-                                spawnWhitePaintBomb(enemy.x, enemy.y);
+                                // Gold minion 1 dies WHITE — smaller version (40% of normal)
+                                const smallRadius = 64; // 40% of normal 160
+                                // Remove nearby colored trails
+                                for (let i = fireTrails.length - 1; i >= 0; i--) {
+                                    const dx = fireTrails[i].x - enemy.x;
+                                    const dy = fireTrails[i].y - enemy.y;
+                                    const dist = Math.sqrt(dx * dx + dy * dy);
+                                    if (dist < smallRadius * 0.9 && fireTrails[i].color !== '#ffffff') {
+                                        fireTrails.splice(i, 1);
+                                    }
+                                }
+                                // Small dense white core
+                                for (let i = 0; i < 140; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const dist = Math.random() * smallRadius * 0.8;
+                                    const t = new FireTrail(enemy.x + Math.cos(angle) * dist, enemy.y + Math.sin(angle) * dist);
+                                    t.size = 2.5 + Math.random() * 3;
+                                    t.color = '#ffffff';
+                                    fireTrails.push(t);
+                                }
+                                // Small spray fingers
+                                for (let i = 0; i < 6; i++) {
+                                    const fingerAngle = Math.random() * Math.PI * 2;
+                                    const fingerLen = smallRadius * 0.6 + Math.random() * 30;
+                                    const fingerWidth = 6 + Math.random() * 10;
+                                    for (let j = 0; j < 12; j++) {
+                                        const along = smallRadius * 0.3 + Math.random() * fingerLen * 0.7;
+                                        const across = (Math.random() - 0.5) * fingerWidth;
+                                        const px = enemy.x + Math.cos(fingerAngle) * along + Math.cos(fingerAngle + Math.PI/2) * across;
+                                        const py = enemy.y + Math.sin(fingerAngle) * along + Math.sin(fingerAngle + Math.PI/2) * across;
+                                        const t = new FireTrail(px, py);
+                                        t.size = 1 + Math.random() * 1.5;
+                                        t.color = '#ffffff';
+                                        fireTrails.push(t);
+                                    }
+                                }
+                                // Scattered white droplets
+                                for (let i = 0; i < 24; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const dist = smallRadius * 0.6 + Math.random() * 32;
+                                    const t = new FireTrail(enemy.x + Math.cos(angle) * dist, enemy.y + Math.sin(angle) * dist);
+                                    t.size = 0.6 + Math.random() * 1.2;
+                                    t.color = '#ffffff';
+                                    fireTrails.push(t);
+                                }
                             } else if (enemy.isGoldMinion2) {
                                 // Gold minion 2 dies GOLD
                                 const gm2Colors = ['#ffd700', '#ffaa00', '#ffcc33', '#fff200', '#ff8800'];
@@ -3177,6 +3539,76 @@
                                     const a2 = Math.random() * Math.PI * 2;
                                     const spd2 = 3 + Math.random() * 8;
                                     particles.push(new Particle(enemy.x, enemy.y, Math.cos(a2) * spd2, Math.sin(a2) * spd2, gm2Colors[Math.floor(Math.random() * gm2Colors.length)], 10 + Math.floor(Math.random() * 12), 0.5 + Math.random() * 0.8));
+                                }
+                            } else if (enemy.isRobotGirl) {
+                                // Robot Girl death — silver particles with purple sparks
+                                robotGirlPhase = false;
+                                robotGirlDefeated = true;
+                                robotGirlPauseTime = Date.now();
+                                screenShake = 10;
+                                playSound('red-king-death');
+
+                                const silverColors = ['#c0c0c0', '#d4d4d4', '#a8a8a8', '#e0e0e0'];
+                                const purpleColor = '#9933ff';
+                                // Big silver explosion
+                                for (let i = 0; i < 180; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const speed = 5 + Math.random() * 20;
+                                    const color = Math.random() < 0.15 ? purpleColor : silverColors[Math.floor(Math.random() * silverColors.length)];
+                                    particles.push(new Particle(enemy.x, enemy.y, Math.cos(angle) * speed, Math.sin(angle) * speed, color, 15 + Math.floor(Math.random() * 25), 0.6 + Math.random() * 1.5));
+                                }
+                                // Silver paint splatter
+                                for (let i = 0; i < 200; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const dist = Math.random() * 100;
+                                    const t = new FireTrail(enemy.x + Math.cos(angle) * dist, enemy.y + Math.sin(angle) * dist);
+                                    t.size = 2.5 + Math.random() * 3.5;
+                                    t.color = silverColors[Math.floor(Math.random() * silverColors.length)];
+                                    fireTrails.push(t);
+                                }
+                                // Purple sparks
+                                for (let i = 0; i < 60; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const dist = Math.random() * 140;
+                                    const t = new FireTrail(enemy.x + Math.cos(angle) * dist, enemy.y + Math.sin(angle) * dist);
+                                    t.size = 1.5 + Math.random() * 2;
+                                    t.color = purpleColor;
+                                    fireTrails.push(t);
+                                }
+
+                                // Drop halo reward
+                                if (haloCount < 2) {
+                                    powerUps.push(new PowerUp(enemy.x, enemy.y, 'halo'));
+                                    playSound('powerup-spawn');
+                                }
+                            } else if (enemy.isRobotMinion1 || enemy.isRobotMinion2) {
+                                // Robot minion death — silver with purple sparks
+                                const silverColors = ['#c0c0c0', '#d4d4d4', '#a8a8a8', '#b0b0b0', '#e0e0e0'];
+                                const purpleColor = '#9933ff';
+                                // Silver particles
+                                for (let i = 0; i < 50; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const speed = 3 + Math.random() * 10;
+                                    const color = Math.random() < 0.2 ? purpleColor : silverColors[Math.floor(Math.random() * silverColors.length)];
+                                    particles.push(new Particle(enemy.x, enemy.y, Math.cos(angle) * speed, Math.sin(angle) * speed, color, 10 + Math.floor(Math.random() * 15), 0.6 + Math.random() * 1.2));
+                                }
+                                // Silver paint
+                                for (let i = 0; i < 40; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const dist = Math.random() * 50;
+                                    const t = new FireTrail(enemy.x + Math.cos(angle) * dist, enemy.y + Math.sin(angle) * dist);
+                                    t.size = 1.5 + Math.random() * 2.5;
+                                    t.color = silverColors[Math.floor(Math.random() * silverColors.length)];
+                                    fireTrails.push(t);
+                                }
+                                // Few purple sparks
+                                for (let i = 0; i < 8; i++) {
+                                    const angle = Math.random() * Math.PI * 2;
+                                    const dist = Math.random() * 60;
+                                    const t = new FireTrail(enemy.x + Math.cos(angle) * dist, enemy.y + Math.sin(angle) * dist);
+                                    t.size = 1 + Math.random() * 1.5;
+                                    t.color = purpleColor;
+                                    fireTrails.push(t);
                                 }
                             } else if (enemy.isDarkBoss) {
                                 spawnDarkSplat(enemy.x, enemy.y);
@@ -3654,16 +4086,60 @@
                     fireTrails.forEach(trail => {
                         paintCtx.fillStyle = trail.color;
                         paintCtx.fillRect(trail.x - trail.size, trail.y - trail.size, trail.size * 2, trail.size * 2);
+                        // Also draw on coverage canvas for tracking
+                        if (coverageCtx) {
+                            coverageCtx.fillStyle = '#ffffff';
+                            coverageCtx.beginPath();
+                            coverageCtx.arc(trail.x, trail.y, trail.size, 0, Math.PI * 2);
+                            coverageCtx.fill();
+                        }
                     });
                     fireTrails = [];
+                }
+
+                // Check canvas coverage every 60 frames (1 second at 60fps)
+                coverageCheckTimer += frameDt * 60;
+                if (coverageCheckTimer >= 60) {
+                    coverageCheckTimer = 0;
+                    if (coverageCtx && coverageCanvas) {
+                        const imageData = coverageCtx.getImageData(0, 0, coverageCanvas.width, coverageCanvas.height);
+                        const pixels = imageData.data;
+                        let paintedPixels = 0;
+                        const totalPixels = coverageCanvas.width * coverageCanvas.height;
+                        // Sample every 4 pixels for performance
+                        for (let i = 0; i < pixels.length; i += 16) {
+                            if (pixels[i + 3] > 0) paintedPixels++;
+                        }
+                        canvasCoverage = (paintedPixels * 4) / totalPixels;
+                    }
                 }
 
                 
                 particles.forEach(particle => particle.draw());
                 projectiles.forEach(proj => proj.draw());
                 enemies.forEach(enemy => enemy.draw());
+
+                // Draw Robot Girl laser beam
+                const robotBoss = enemies.find(e => e.isRobotGirl);
+                if (robotBoss && robotBoss.laserActiveTimer > 0) {
+                    ctx.save();
+                    // Glowing purple laser beam
+                    const laserWidth = 35;
+                    const laserHeight = canvas.height - robotBoss.y - 30;
+                    // Outer glow
+                    ctx.fillStyle = 'rgba(204, 102, 255, 0.3)';
+                    ctx.fillRect(robotBoss.laserX - laserWidth - 10, robotBoss.y + 30, (laserWidth + 10) * 2, laserHeight);
+                    // Inner bright beam
+                    ctx.fillStyle = 'rgba(153, 51, 255, 0.7)';
+                    ctx.fillRect(robotBoss.laserX - laserWidth, robotBoss.y + 30, laserWidth * 2, laserHeight);
+                    // Core
+                    ctx.fillStyle = 'rgba(204, 102, 255, 0.9)';
+                    ctx.fillRect(robotBoss.laserX - laserWidth/2, robotBoss.y + 30, laserWidth, laserHeight);
+                    ctx.restore();
+                }
+
                 powerUps.forEach(p => p.draw());
-                
+
                 // Draw paint rain
                 if (paintRainActive && paintRainDrops.length > 0) {
                     paintRainDrops.forEach(d => {
@@ -3817,6 +4293,8 @@
                 }
             } else if (gameState === 'gallery') {
                 drawHangMode();
+            } else if (gameState === 'victory') {
+                drawVictory();
             } else if (gameState === 'gameOver') {
                 drawGameOver();
             }
@@ -4456,6 +4934,8 @@
             if (redKingDefeated) waveLabel += ' RKd';
             if (goldCrownPhase) waveLabel += ' GC';
             if (goldCrownDefeated) waveLabel += ' GCd';
+            if (robotGirlPhase) waveLabel += ' RG';
+            if (robotGirlDefeated) waveLabel += ' RGd';
             waveLabel += ' e' + enemies.length;
             waveLabel += ' wp' + (wavePause > 0 ? 1 : 0);
             waveLabel += ' bi' + waveBurstIndex + '/' + burstSpawned;
@@ -4463,6 +4943,9 @@
             if (!bgMusicBuffer) waveLabel += _musicLoadFailed ? ' M:FAIL' : ' M:LOAD';
             else if (!bgMusic || !bgMusic.source) waveLabel += ' M:OFF';
             ctx.fillText(waveLabel, 4, canvas.height - 4);
+            // Canvas coverage percentage
+            const coveragePct = Math.floor(canvasCoverage * 100);
+            ctx.fillText(coveragePct + '% painted', 4, canvas.height - 16);
             
             // No end button — hang IS the end
             endBtnRect = null;
@@ -4775,6 +5258,36 @@
                     if (Date.now() - gameOverTime < 4000) return;
                     playSound('menu-tap');
                     restartGame();
+                } else if (gameState === 'victory') {
+                    const cx = mouse.x, cy = mouse.y;
+                    const elapsed = (Date.now() - victoryStartTime) / 1000;
+                    if (elapsed < 6) return; // Wait for buttons to appear
+
+                    // Hang Art button
+                    if (window.victoryHangBtn) {
+                        const btn = window.victoryHangBtn;
+                        if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+                            playSound('menu-tap');
+                            // Go to gallery mode
+                            captureArt();
+                            gameState = 'gallery';
+                            galleryReturnState = 'gameOver';
+                            return;
+                        }
+                    }
+
+                    // Keep Painting button
+                    if (window.victoryKeepBtn) {
+                        const btn = window.victoryKeepBtn;
+                        if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+                            playSound('menu-tap');
+                            // Resume free-for-all mode
+                            gameState = 'playing';
+                            victoryDanceEnemies = [];
+                            startMusic();
+                            return;
+                        }
+                    }
                 }
             } catch(e) {
                 // Show error on canvas for mobile debugging
@@ -4809,6 +5322,13 @@
             paintCanvas.width = canvas.width;
             paintCanvas.height = canvas.height;
             paintCtx = paintCanvas.getContext('2d');
+            // Init coverage canvas
+            coverageCanvas = document.createElement('canvas');
+            coverageCanvas.width = canvas.width;
+            coverageCanvas.height = canvas.height;
+            coverageCtx = coverageCanvas.getContext('2d');
+            canvasCoverage = 0;
+            coverageCheckTimer = 0;
         }
         
         function updatePreroll() {
@@ -4855,7 +5375,151 @@
                 startGame();
             }
         }
-        
+
+        function updateVictory() {
+            frameDt = 1/60;
+            const elapsed = (Date.now() - victoryStartTime) / 1000;
+
+            // Auto-walk hero to center over 1 second
+            if (elapsed < 1) {
+                const targetX = canvas.width / 2;
+                const targetY = canvas.height / 2;
+                player.x += (targetX - player.x) * 0.1 * frameDt * 60;
+                player.y += (targetY - player.y) * 0.1 * frameDt * 60;
+            }
+
+            // Spawn victory dance enemies after 1 second
+            if (elapsed >= 1 && victoryDanceEnemies.length === 0) {
+                const radius = 100;
+                const enemyTypes = ['grunt', 'green', 'whiteBoss', 'darkBoss', 'goldMinion1', 'goldMinion2', 'robotMinion1', 'robotMinion2'];
+                for (let i = 0; i < 10; i++) {
+                    const angle = (i / 10) * Math.PI * 2;
+                    const x = player.x + Math.cos(angle) * radius;
+                    const y = player.y + Math.sin(angle) * radius;
+                    const type = enemyTypes[i % enemyTypes.length];
+                    const e = new Enemy(x, y, false, type);
+                    e.victoryDance = true;
+                    e.orbitAngle = angle;
+                    victoryDanceEnemies.push(e);
+                }
+            }
+
+            // Victory dance: orbit around hero
+            if (victoryDanceEnemies.length > 0 && elapsed >= 1 && elapsed < 9) {
+                const orbitSpeed = victoryDanceReverse ? -0.02 : 0.02;
+                victoryDanceEnemies.forEach(e => {
+                    e.orbitAngle += orbitSpeed * frameDt * 60;
+                    e.x = player.x + Math.cos(e.orbitAngle) * 100;
+                    e.y = player.y + Math.sin(e.orbitAngle) * 100;
+                    // Update animation
+                    e.animTime += frameDt * 60;
+                    if (Math.floor(e.animTime / 4) !== Math.floor((e.animTime - frameDt * 60) / 4)) {
+                        e.animFrame = (e.animFrame + 1) % 6;
+                    }
+                    // Face direction of movement
+                    if (Math.abs(Math.cos(e.orbitAngle)) > 0.5) {
+                        e.currentDirection = Math.cos(e.orbitAngle) > 0 ? 'east' : 'west';
+                    } else {
+                        e.currentDirection = Math.sin(e.orbitAngle) > 0 ? 'south' : 'north';
+                    }
+                });
+
+                // Reverse direction every 2 seconds
+                if (Date.now() - victoryDanceLastReverse >= 2000) {
+                    victoryDanceReverse = !victoryDanceReverse;
+                    victoryDanceLastReverse = Date.now();
+                }
+
+                // All enemies jump together every 3 seconds
+                if (Date.now() - victoryDanceLastJump >= 3000) {
+                    victoryDanceLastJump = Date.now();
+                    victoryDanceEnemies.forEach(e => {
+                        for (let i = 0; i < 5; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            particles.push(new Particle(e.x, e.y, Math.cos(angle) * 2, Math.sin(angle) * 2 - 3, e.favoriteColor || '#ff4400', 8, 1));
+                        }
+                    });
+                    playSound('enemy-death');
+                }
+            }
+
+            // Fade out victory dance at 9 seconds
+            if (elapsed >= 9) {
+                victoryDanceEnemies = [];
+            }
+
+            // Update particles
+            particles = particles.filter(particle => {
+                particle.update();
+                return particle.life > 0;
+            });
+        }
+
+        function drawVictory() {
+            // White background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Paint splats
+            if (paintCanvas) ctx.drawImage(paintCanvas, 0, 0);
+
+            // Victory dance enemies
+            victoryDanceEnemies.forEach(e => e.draw());
+
+            // Player
+            player.draw();
+
+            // Particles
+            particles.forEach(particle => particle.draw());
+
+            const elapsed = (Date.now() - victoryStartTime) / 1000;
+
+            // Victory text fades in after 3 seconds
+            if (elapsed >= 3) {
+                const textAlpha = Math.min(1, (elapsed - 3) / 1);
+                ctx.save();
+                ctx.globalAlpha = textAlpha;
+                ctx.font = 'italic 32px Georgia';
+                ctx.fillStyle = '#4a3520';
+                ctx.textAlign = 'center';
+                ctx.fillText('You win, you are an artist!', canvas.width / 2, canvas.height / 2 - 80);
+                ctx.restore();
+            }
+
+            // Buttons appear after 6 seconds
+            if (elapsed >= 6) {
+                const btnAlpha = Math.min(1, (elapsed - 6) / 1);
+                ctx.save();
+                ctx.globalAlpha = btnAlpha;
+
+                const btnWidth = 160;
+                const btnHeight = 50;
+                const btnY = canvas.height / 2;
+                const hangX = canvas.width / 2 - btnWidth - 10;
+                const keepX = canvas.width / 2 + 10;
+
+                // Hang Art button
+                ctx.fillStyle = '#3d2b1a';
+                ctx.fillRect(hangX, btnY, btnWidth, btnHeight);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('HANG ART', hangX + btnWidth / 2, btnY + btnHeight / 2 + 6);
+
+                // Keep Painting button
+                ctx.fillStyle = '#3d2b1a';
+                ctx.fillRect(keepX, btnY, btnWidth, btnHeight);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('KEEP PAINTING', keepX + btnWidth / 2, btnY + btnHeight / 2 + 6);
+
+                ctx.restore();
+
+                // Store button hitboxes globally
+                window.victoryHangBtn = { x: hangX, y: btnY, w: btnWidth, h: btnHeight };
+                window.victoryKeepBtn = { x: keepX, y: btnY, w: btnWidth, h: btnHeight };
+            }
+        }
+
         function drawPreroll() {
             // White background
             ctx.fillStyle = '#ffffff';
@@ -4947,7 +5611,15 @@
             paintCanvas.width = canvas.width;
             paintCanvas.height = canvas.height;
             paintCtx = paintCanvas.getContext('2d');
-            
+
+            // Init coverage canvas for tracking painted percentage
+            coverageCanvas = document.createElement('canvas');
+            coverageCanvas.width = canvas.width;
+            coverageCanvas.height = canvas.height;
+            coverageCtx = coverageCanvas.getContext('2d');
+            canvasCoverage = 0;
+            coverageCheckTimer = 0;
+
             // Reset buffs
             playerBuffs = {
                 duck: 0,
@@ -4971,7 +5643,9 @@
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
             goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
+            robotGirlPhase = false; robotGirlDefeated = false; robotGirlPauseTime = 0; robotGirlSpawnTime = 0;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
+            victoryStartTime = 0; victoryDanceEnemies = [];
         }
 
         function startGame() {
@@ -5018,7 +5692,15 @@
             paintCanvas.width = canvas.width;
             paintCanvas.height = canvas.height;
             paintCtx = paintCanvas.getContext('2d');
-            
+
+            // Init coverage canvas for tracking painted percentage
+            coverageCanvas = document.createElement('canvas');
+            coverageCanvas.width = canvas.width;
+            coverageCanvas.height = canvas.height;
+            coverageCtx = coverageCanvas.getContext('2d');
+            canvasCoverage = 0;
+            coverageCheckTimer = 0;
+
             // Reset buffs
             playerBuffs = {
                 duck: 0,
@@ -5042,7 +5724,9 @@
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
             goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
+            robotGirlPhase = false; robotGirlDefeated = false; robotGirlPauseTime = 0; robotGirlSpawnTime = 0;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
+            victoryStartTime = 0; victoryDanceEnemies = [];
         }
         
         function restartGame() {
