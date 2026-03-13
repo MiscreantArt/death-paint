@@ -1654,9 +1654,9 @@
                     this.isGreen = false;
                     this.isRedKing = true;
                 } else if (forceType === 'goldCrown') {
-                    // Gold Crown Boss — appears during free-for-all
+                    // Gold King Boss — big, tanky, spawns splitting minions
                     this.spriteId = 5602;
-                    this.health = 50;
+                    this.health = 65;
                     this.speed = 1.1;
                     this.tier = 4;
                     this.size = 80;
@@ -1664,6 +1664,8 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isGoldCrown = true;
+                    this.minionSpawnTimer = 240; // 4 seconds at 60fps
+                    this.shakeTimer = 0; // Shake before spawning minions
                 } else if (forceType === 'redMinion') {
                     // Red Minion — indestructible bomber, explodes after 4 seconds
                     this.spriteId = 2164;
@@ -1690,6 +1692,8 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isGoldMinion1 = true;
+                    this.splitTimer = 180; // 3 seconds at 60fps — splits into 2x goldMinion2
+                    this.splitWarning = false;
                 } else if (forceType === 'goldMinion2') {
                     // Gold Crown herald — quicker support pest
                     this.spriteId = 5609;
@@ -1702,6 +1706,8 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isGoldMinion2 = true;
+                    this.splitTimer = 180; // 3 seconds at 60fps — splits into 2x goldMinion1
+                    this.splitWarning = false;
                 } else {
                     // Dark purple bosses — BIG, splatter mostly black/psychedelic
                     const darkBosses = [6949, 1729, 2290];
@@ -1728,6 +1734,7 @@
                 this.knockbackX = 0; // Knockback velocity X
                 this.knockbackY = 0; // Knockback velocity Y
                 this.frozenTimer = 0; // Freeze timer for crown power-up
+                this.spawnFlash = 0; // Flash-in timer for minions spawned from boss (0 = normal)
             }
             
             update() {
@@ -1758,6 +1765,76 @@
                         this.crownVulnerable = false;
                     }
                     return; // Skip movement
+                }
+                
+                // Spawn flash — blink on/off when emerging from boss
+                if (this.spawnFlash > 0) {
+                    this.spawnFlash -= frameDt * 60;
+                }
+                
+                // Gold King: shake and spawn minion pairs every ~4 seconds
+                if (this.isGoldCrown && this.minionSpawnTimer !== undefined) {
+                    this.minionSpawnTimer -= frameDt * 60;
+                    // Start shaking 20 frames before spawn
+                    if (this.minionSpawnTimer <= 20 && this.minionSpawnTimer > 0) {
+                        this.shakeTimer = this.minionSpawnTimer;
+                    }
+                    if (this.minionSpawnTimer <= 0) {
+                        this.shakeTimer = 0;
+                        this.minionSpawnTimer = 240; // Reset 4s timer
+                        // Spawn a pair of gold minions from the king
+                        if (enemies.length < 20) {
+                            const m1 = new Enemy(this.x - 30, this.y, false, 'goldMinion1');
+                            m1.spawnFlash = 30; // Flash on/off for 0.5s
+                            const m2 = new Enemy(this.x + 30, this.y, false, 'goldMinion2');
+                            m2.spawnFlash = 30;
+                            enemies.push(m1, m2);
+                            // Gold spray particles
+                            const goldSpray = ['#ffd700', '#ffaa00', '#ffcc33', '#fff200'];
+                            for (let i = 0; i < 20; i++) {
+                                const a = Math.random() * Math.PI * 2;
+                                particles.push(new Particle(this.x + Math.cos(a) * 15, this.y + Math.sin(a) * 15, Math.cos(a) * (2 + Math.random() * 3), Math.sin(a) * (2 + Math.random() * 3), goldSpray[Math.floor(Math.random() * goldSpray.length)], 8 + Math.floor(Math.random() * 10), 1 + Math.random()));
+                            }
+                            playSound('chromie-shockwave');
+                        }
+                    }
+                }
+                
+                // Gold minion splitting — every 3 seconds, split into 2 of the other type
+                if ((this.isGoldMinion1 || this.isGoldMinion2) && this.splitTimer !== undefined) {
+                    this.splitTimer -= frameDt * 60;
+                    // Warning shake + gold spray at 1 second remaining
+                    if (this.splitTimer <= 60 && !this.splitWarning) {
+                        this.splitWarning = true;
+                    }
+                    // Emit light gold spray during warning
+                    if (this.splitWarning && Math.random() < 0.15) {
+                        const a = Math.random() * Math.PI * 2;
+                        particles.push(new Particle(this.x, this.y, Math.cos(a) * 1.5, Math.sin(a) * 1.5, '#ffd700', 4 + Math.floor(Math.random() * 5), 0.6 + Math.random() * 0.4));
+                    }
+                    if (this.splitTimer <= 0) {
+                        // Cap: don't split if too many enemies on screen
+                        if (enemies.length < 20) {
+                            const childType = this.isGoldMinion1 ? 'goldMinion2' : 'goldMinion1';
+                            const c1 = new Enemy(this.x - 15, this.y - 10, false, childType);
+                            const c2 = new Enemy(this.x + 15, this.y + 10, false, childType);
+                            enemies.push(c1, c2);
+                            // Gold spray on split
+                            const goldSpray = ['#ffd700', '#ffaa00', '#ffcc33'];
+                            for (let i = 0; i < 12; i++) {
+                                const a = Math.random() * Math.PI * 2;
+                                particles.push(new Particle(this.x, this.y, Math.cos(a) * (1.5 + Math.random() * 2), Math.sin(a) * (1.5 + Math.random() * 2), goldSpray[Math.floor(Math.random() * goldSpray.length)], 6 + Math.floor(Math.random() * 8), 0.8 + Math.random() * 0.6));
+                            }
+                            // Mark self for removal
+                            this.health = 0;
+                            this._markedDead = true;
+                            return;
+                        } else {
+                            // Can't split — reset timer and try again later
+                            this.splitTimer = 180;
+                            this.splitWarning = false;
+                        }
+                    }
                 }
                 
                 // Tutorial step 3: run straight across, don't chase player
@@ -1904,7 +1981,28 @@
             }
             
             draw() {
+                // Spawn flash — blink on/off when emerging from boss
+                if (this.spawnFlash > 0) {
+                    // Blink: visible every other 3 frames
+                    if (Math.floor(this.spawnFlash) % 6 < 3) {
+                        return; // Invisible this frame
+                    }
+                }
+                
                 ctx.save();
+                
+                // Gold King shake when about to spawn minions
+                if (this.isGoldCrown && this.shakeTimer > 0) {
+                    ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
+                }
+                
+                // Gold minion split warning shake
+                if ((this.isGoldMinion1 || this.isGoldMinion2) && this.splitWarning && this.splitTimer > 0) {
+                    ctx.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
+                    // Gold warning glow
+                    ctx.shadowColor = 'rgba(255,215,0,0.8)';
+                    ctx.shadowBlur = 15;
+                }
                 
                 // Subtle drop shadow below character
                 ctx.fillStyle = 'rgba(0,0,0,0.1)';
@@ -2772,15 +2870,8 @@
                     }
                 }
             } else if (goldCrownPhase) {
-                // Trickle Gold Crown minions (2404 + 5609) during fight
-                const crownAliveTime = (currentTime - (goldCrownSpawnTime || currentTime)) / 1000;
-                if (crownAliveTime > 3 && currentTime - lastEnemySpawnTime >= 2200 && enemies.length < 8) {
-                    const pos = getEdgeSpawnPos();
-                    // Alternate between the two minion types
-                    const minionType = Math.random() < 0.5 ? 'goldMinion1' : 'goldMinion2';
-                    enemies.push(new Enemy(pos.x, pos.y, false, minionType));
-                    lastEnemySpawnTime = currentTime;
-                }
+                // Gold King spawns his own minions via minionSpawnTimer in his update() method
+                // No external trickle spawning needed
             } else if (goldCrownDefeated) {
                 // Post-Gold Crown free-for-all
                 const gcBreathing = Date.now() - goldCrownPauseTime < 3500;
@@ -2970,6 +3061,25 @@
                                     t.size = 3.5 + Math.random() * 4;
                                     t.color = goldColors[Math.floor(Math.random() * goldColors.length)];
                                     fireTrails.push(t);
+                                }
+                            } else if (enemy.isGoldMinion1) {
+                                // Gold minion 1 dies WHITE
+                                spawnWhitePaintBomb(enemy.x, enemy.y);
+                            } else if (enemy.isGoldMinion2) {
+                                // Gold minion 2 dies GOLD
+                                const gm2Colors = ['#ffd700', '#ffaa00', '#ffcc33', '#fff200', '#ff8800'];
+                                for (let i = 0; i < 80; i++) {
+                                    const a2 = Math.random() * Math.PI * 2;
+                                    const dist2 = Math.random() * 60;
+                                    const t2 = new FireTrail(enemy.x + Math.cos(a2) * dist2, enemy.y + Math.sin(a2) * dist2);
+                                    t2.size = 2 + Math.random() * 3;
+                                    t2.color = gm2Colors[Math.floor(Math.random() * gm2Colors.length)];
+                                    fireTrails.push(t2);
+                                }
+                                for (let i = 0; i < 40; i++) {
+                                    const a2 = Math.random() * Math.PI * 2;
+                                    const spd2 = 3 + Math.random() * 8;
+                                    particles.push(new Particle(enemy.x, enemy.y, Math.cos(a2) * spd2, Math.sin(a2) * spd2, gm2Colors[Math.floor(Math.random() * gm2Colors.length)], 10 + Math.floor(Math.random() * 12), 0.5 + Math.random() * 0.8));
                                 }
                             } else if (enemy.isDarkBoss) {
                                 spawnDarkSplat(enemy.x, enemy.y);
