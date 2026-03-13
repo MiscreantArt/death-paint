@@ -2890,7 +2890,15 @@
                 // 15% chance of Red Minion if Red King defeated
                 enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
             } else {
-                enemies.push(new Enemy(pos.x, pos.y));
+                // After Robot Girl: no white bosses (makes canvas coverage easier)
+                if (robotGirlDefeated) {
+                    // Force non-white types: grunts, greens, dark bosses only
+                    const postTypes = ['grunt', 'grunt', 'grunt', 'grunt', 'green', 'green', 'darkBoss'];
+                    const pick = postTypes[Math.floor(Math.random() * postTypes.length)];
+                    enemies.push(new Enemy(pos.x, pos.y, false, pick));
+                } else {
+                    enemies.push(new Enemy(pos.x, pos.y));
+                }
             }
             lastEnemySpawnTime = Date.now();
         }
