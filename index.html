@@ -2458,7 +2458,11 @@
             // Crown freeze global timer
             if (playerBuffs.crown > 0) {
                 playerBuffs.crown -= frameDt * 60;
-                if (playerBuffs.crown <= 0) {
+                // If all enemies killed during freeze, end freeze early and continue waves
+                if (enemies.length === 0 && playerBuffs.crown > 0) {
+                    playerBuffs.crown = 0;
+                    playSound('powerup-expire');
+                } else if (playerBuffs.crown <= 0) {
                     playerBuffs.crown = 0;
                     playSound('powerup-expire');
                     // Unfreeze all enemies, remove bomber vulnerability
