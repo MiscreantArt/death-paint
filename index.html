@@ -2441,6 +2441,7 @@
         let goldCrownPauseTime = 0;
         let goldCrownSpawnTime = 0;
         let goldCrownKillThreshold = 50;
+        let postGoldCrownWavesStarted = false;
         // Wave definitions — each wave is an array of "bursts"
         // Each burst: { count, types, delay } — count enemies spawn close together, delay ms between bursts
         const WAVE_DEFS = [
@@ -2523,6 +2524,46 @@
                 { count: 6, types: ['redMinion', 'darkBoss', 'whiteBoss', 'grunt', 'green', 'grunt'], delay: 2100 },
                 { count: 6, types: ['darkBoss', 'redMinion', 'whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2200 },
             ]},
+            // === POST-GOLD KING WAVES (11-15) — gold minions in the mix, leads to final boss ===
+            // Wave 11: 20 total, gold minions introduced lightly
+            { bursts: [
+                { count: 4, types: ['grunt', 'green', 'whiteBoss', 'goldMinion1'], delay: 2400 },
+                { count: 4, types: ['darkBoss', 'grunt', 'green', 'goldMinion2'], delay: 2400 },
+                { count: 4, types: ['grunt', 'goldMinion1', 'whiteBoss', 'green'], delay: 2400 },
+                { count: 4, types: ['goldMinion2', 'grunt', 'darkBoss', 'green'], delay: 2400 },
+                { count: 4, types: ['grunt', 'green', 'goldMinion1', 'whiteBoss'], delay: 2400 },
+            ]},
+            // Wave 12: 25 total, more gold minions
+            { bursts: [
+                { count: 5, types: ['grunt', 'goldMinion1', 'green', 'darkBoss', 'goldMinion2'], delay: 2200 },
+                { count: 5, types: ['goldMinion2', 'grunt', 'whiteBoss', 'green', 'goldMinion1'], delay: 2200 },
+                { count: 5, types: ['darkBoss', 'goldMinion1', 'grunt', 'goldMinion2', 'green'], delay: 2200 },
+                { count: 5, types: ['goldMinion1', 'grunt', 'green', 'whiteBoss', 'goldMinion2'], delay: 2200 },
+                { count: 5, types: ['grunt', 'goldMinion2', 'darkBoss', 'goldMinion1', 'green'], delay: 2200 },
+            ]},
+            // Wave 13: 25 total, heavy mix including darkBoss and gold minions
+            { bursts: [
+                { count: 5, types: ['darkBoss', 'goldMinion1', 'redMinion', 'goldMinion2', 'grunt'], delay: 2000 },
+                { count: 5, types: ['goldMinion2', 'whiteBoss', 'goldMinion1', 'darkBoss', 'green'], delay: 2000 },
+                { count: 5, types: ['redMinion', 'goldMinion1', 'darkBoss', 'goldMinion2', 'grunt'], delay: 2000 },
+                { count: 5, types: ['goldMinion1', 'darkBoss', 'goldMinion2', 'grunt', 'whiteBoss'], delay: 2000 },
+                { count: 5, types: ['darkBoss', 'goldMinion2', 'redMinion', 'goldMinion1', 'green'], delay: 2200 },
+            ]},
+            // Wave 14: 24 total, all types heavy
+            { bursts: [
+                { count: 6, types: ['goldMinion1', 'darkBoss', 'redMinion', 'goldMinion2', 'grunt', 'whiteBoss'], delay: 2000 },
+                { count: 6, types: ['darkBoss', 'goldMinion2', 'grunt', 'goldMinion1', 'redMinion', 'green'], delay: 2000 },
+                { count: 6, types: ['goldMinion1', 'redMinion', 'darkBoss', 'goldMinion2', 'whiteBoss', 'grunt'], delay: 2000 },
+                { count: 6, types: ['goldMinion2', 'grunt', 'goldMinion1', 'darkBoss', 'redMinion', 'green'], delay: 2200 },
+            ]},
+            // Wave 15: 30 total — max pressure before final boss
+            { bursts: [
+                { count: 6, types: ['goldMinion1', 'darkBoss', 'goldMinion2', 'redMinion', 'grunt', 'whiteBoss'], delay: 2000 },
+                { count: 6, types: ['goldMinion2', 'redMinion', 'goldMinion1', 'darkBoss', 'green', 'grunt'], delay: 2000 },
+                { count: 6, types: ['darkBoss', 'goldMinion1', 'redMinion', 'goldMinion2', 'whiteBoss', 'grunt'], delay: 2000 },
+                { count: 6, types: ['goldMinion1', 'goldMinion2', 'darkBoss', 'grunt', 'redMinion', 'green'], delay: 2000 },
+                { count: 6, types: ['redMinion', 'goldMinion2', 'goldMinion1', 'darkBoss', 'whiteBoss', 'grunt'], delay: 2200 },
+            ]},
         ];
         let waveBurstIndex = 0;
         let burstSpawned = 0;
@@ -2537,8 +2578,13 @@
             
             const pos = getEdgeSpawnPos();
             
-            // 15% chance of Red Minion if Red King defeated
-            if (redKingDefeated && Math.random() < 0.15) {
+            // Late-game enemy mix for free-for-all
+            if (goldCrownDefeated && Math.random() < 0.12) {
+                // 12% chance of gold minions (will split and create chaos)
+                const goldType = Math.random() < 0.5 ? 'goldMinion1' : 'goldMinion2';
+                enemies.push(new Enemy(pos.x, pos.y, false, goldType));
+            } else if (redKingDefeated && Math.random() < 0.15) {
+                // 15% chance of Red Minion if Red King defeated
                 enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
             } else {
                 enemies.push(new Enemy(pos.x, pos.y));
@@ -2872,13 +2918,53 @@
             } else if (goldCrownPhase) {
                 // Gold King spawns his own minions via minionSpawnTimer in his update() method
                 // No external trickle spawning needed
-            } else if (goldCrownDefeated) {
-                // Post-Gold Crown free-for-all
-                const gcBreathing = Date.now() - goldCrownPauseTime < 3500;
-                const gcHaloGrace = Date.now() < haloResumePauseUntil;
-                if (gcBreathing || gcHaloGrace) { /* no spawns, but game keeps running */ }
+            } else if (goldCrownDefeated && !postGoldCrownWavesStarted) {
+                // Post-Gold King: 3.5s breathing room then start waves 11-15
+                const timeSinceGC = Date.now() - goldCrownPauseTime;
+                if (timeSinceGC < 3500) { /* breathing room */ }
+                else if (Date.now() < haloResumePauseUntil && timeSinceGC < 10000) { /* halo grace */ }
                 else {
+                    postGoldCrownWavesStarted = true;
+                    currentWave = 11;
+                    wavePause = Date.now();
+                    waveBurstIndex = 0;
+                    burstSpawned = 0;
+                }
+            } else if (currentWave >= 11 && currentWave <= 15) {
+                const waveDef = WAVE_DEFS[currentWave - 1];
+                const waveMaxOnScreen = maxEnemiesOnScreen + 2; // Slightly higher cap for late waves
                 
+                if (wavePause > 0) {
+                    const currentWaveGap = 2500; // Pause between post-Gold King waves
+                    if (currentTime - wavePause >= currentWaveGap) {
+                        wavePause = 0;
+                        lastEnemySpawnTime = currentTime;
+                    }
+                } else if (waveBurstIndex < waveDef.bursts.length) {
+                    const burst = waveDef.bursts[waveBurstIndex];
+                    if (burstSpawned < burst.count) {
+                        if (enemies.length < waveMaxOnScreen && currentTime - lastEnemySpawnTime >= burstDelay) {
+                            const pos = getEdgeSpawnPos();
+                            const type = burst.types[burstSpawned % burst.types.length];
+                            enemies.push(new Enemy(pos.x, pos.y, false, type));
+                            burstSpawned++;
+                            lastEnemySpawnTime = currentTime;
+                        }
+                    } else if (currentTime - lastEnemySpawnTime >= burst.delay) {
+                        waveBurstIndex++;
+                        burstSpawned = 0;
+                    }
+                } else {
+                    currentWave++;
+                    waveBurstIndex = 0;
+                    burstSpawned = 0;
+                    if (currentWave <= 15) {
+                        wavePause = currentTime;
+                    }
+                }
+            } else if (currentWave >= 16) {
+                // TODO: Final Boss Robot #9651 with minions #2990, #4936
+                // For now: free-for-all endless mode
                 const nextSpawnDelay = Math.max(500, 1200 - gameTime * 3);
                 if (currentTime - lastEnemySpawnTime >= nextSpawnDelay && enemies.length < maxEnemiesOnScreen) {
                     spawnSingleEnemy();
@@ -2889,7 +2975,6 @@
                     playerSpeedBonus += 0.02;
                     maxEnemiesOnScreen = Math.min(25, maxEnemiesOnScreen + 1);
                 }
-                } // end else (not breathing)
             }
             } catch(spawnErr) {
                 // Surface spawn errors visibly
@@ -4870,7 +4955,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
-            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
 
@@ -4941,7 +5026,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
-            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
         
