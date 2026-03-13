@@ -2409,13 +2409,21 @@
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2200 },
                 { count: 3, types: ['redMinion', 'darkBoss', 'green'], delay: 2400 },
             ]},
-            // Wave 8: 20 total, heavy ramp before Gold Crown
+            // Wave 8: 20 total, heavy ramp
             { bursts: [
                 { count: 4, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss'], delay: 2000 },
                 { count: 4, types: ['redMinion', 'darkBoss', 'green', 'grunt'], delay: 2000 },
                 { count: 4, types: ['whiteBoss', 'redMinion', 'darkBoss', 'grunt'], delay: 2000 },
                 { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2000 },
                 { count: 4, types: ['redMinion', 'whiteBoss', 'darkBoss', 'grunt'], delay: 2200 },
+            ]},
+            // Wave 9: 30 total — final wave before Gold King, 6×5 max pressure
+            { bursts: [
+                { count: 6, types: ['grunt', 'green', 'whiteBoss', 'darkBoss', 'redMinion', 'grunt'], delay: 2000 },
+                { count: 6, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 2000 },
+                { count: 6, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss', 'green', 'redMinion'], delay: 2100 },
+                { count: 6, types: ['redMinion', 'darkBoss', 'whiteBoss', 'grunt', 'green', 'grunt'], delay: 2100 },
+                { count: 6, types: ['darkBoss', 'redMinion', 'whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2200 },
             ]},
         ];
         let waveBurstIndex = 0;
@@ -2717,7 +2725,7 @@
                     waveBurstIndex = 0;
                     burstSpawned = 0;
                 }
-            } else if (currentWave >= 6 && currentWave <= 9) {
+            } else if (currentWave >= 6 && currentWave <= 10) {
                 const waveDef = WAVE_DEFS[currentWave - 1];
                 const waveMaxOnScreen = WAVE_MAX_ON_SCREEN[currentWave] || maxEnemiesOnScreen;
                 
@@ -2745,12 +2753,12 @@
                     currentWave++;
                     waveBurstIndex = 0;
                     burstSpawned = 0;
-                    if (currentWave <= 9) {
+                    if (currentWave <= 10) {
                         wavePause = currentTime;
                     }
                 }
-            } else if (currentWave === 10 && !goldCrownDefeated && !goldCrownPhase) {
-                // After wave 9: Gold Crown boss
+            } else if (currentWave === 11 && !goldCrownDefeated && !goldCrownPhase) {
+                // After wave 10: Gold King boss
                 if (enemies.length === 0) {
                     if (!goldCrownPauseTime) {
                         goldCrownPauseTime = currentTime;
