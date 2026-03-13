@@ -3168,6 +3168,19 @@
                     const totalDeathTime = Math.max(totalFireworkTime, 2700);
                     setTimeout(() => {
                         if (gameState !== 'dying') return;
+                        // If Red King was in the fight, mark defeated NOW
+                        // (firework timeouts may not fire if gameState changes)
+                        if (redKingPhase) {
+                            redKingPhase = false;
+                            redKingDefeated = true;
+                            redKingPauseTime = Date.now();
+                        }
+                        // Same for Gold Crown
+                        if (goldCrownPhase) {
+                            goldCrownPhase = false;
+                            goldCrownDefeated = true;
+                            goldCrownPauseTime = Date.now();
+                        }
                         enemies = [];
                         haloReviving = true;
                         haloReviveTime = Date.now();
@@ -4191,9 +4204,9 @@
             if (hasHalo) {
                 const haloIcon = sprites.powerUps.halo;
                 if (haloIcon && haloIcon.complete && haloIcon.naturalWidth > 0) {
-                    const iconSize = 32;
-                    const iconX = hangX + hangW + 8;
-                    const iconY = btnY2 + (btnH - iconSize) / 2;
+                    const iconSize = 90;
+                    const iconX = hangX + hangW + 4;
+                    const iconY = btnY2 + 2;
                     ctx.globalAlpha = 0.85;
                     try {
                         ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
@@ -4204,7 +4217,7 @@
             
             // Debug: wave indicator (tiny, bottom-left)
             ctx.font = '9px monospace';
-            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
             ctx.textAlign = 'left';
             let waveLabel = 'w' + currentWave;
             if (redKingPhase) waveLabel += ' RK';
@@ -4212,6 +4225,9 @@
             if (goldCrownPhase) waveLabel += ' GC';
             if (goldCrownDefeated) waveLabel += ' GCd';
             waveLabel += ' e' + enemies.length;
+            waveLabel += ' wp' + (wavePause > 0 ? 1 : 0);
+            waveLabel += ' bi' + waveBurstIndex + '/' + burstSpawned;
+            if (haloResumePauseUntil > Date.now()) waveLabel += ' HALO';
             ctx.fillText(waveLabel, 4, canvas.height - 4);
             
             // No end button — hang IS the end
