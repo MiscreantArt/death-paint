@@ -2702,13 +2702,13 @@
                 }
             } else if (redKingDefeated && currentWave === 6 && wavePause === 0) {
                 // Post-Red King: 3.5s breathing room then start waves 6-9
-                // Don't return — just skip spawning so rest of game still runs
-                if (Date.now() - redKingPauseTime < 3500) { /* breathing room — no spawns but game keeps running */ }
-                else if (Date.now() < haloResumePauseUntil) { /* halo revive grace */ }
+                const timeSinceRK = Date.now() - redKingPauseTime;
+                if (timeSinceRK < 3500) { /* breathing room */ }
+                else if (Date.now() < haloResumePauseUntil && timeSinceRK < 10000) { /* halo grace, but timeout after 10s */ }
                 else {
-                    // Set wavePause so the 5-8 branch picks it up
-                    // Wave 5 gap is short since breathing room already happened
                     wavePause = Date.now();
+                    waveBurstIndex = 0;
+                    burstSpawned = 0;
                 }
             } else if (currentWave >= 6 && currentWave <= 9) {
                 const waveDef = WAVE_DEFS[currentWave - 1];
@@ -2785,6 +2785,18 @@
                 }
                 } // end else (not breathing)
             }
+            // Safety: if stuck post-boss for 15+ seconds with no enemies, force wave forward
+            if (redKingDefeated && !goldCrownPhase && !goldCrownDefeated && enemies.length === 0 && redKingPauseTime > 0) {
+                const stuck = Date.now() - redKingPauseTime;
+                if (stuck > 15000 && currentWave <= 9) {
+                    wavePause = 0;
+                    waveBurstIndex = 0;
+                    burstSpawned = 0;
+                    if (currentWave < 6) currentWave = 6;
+                    lastEnemySpawnTime = Date.now() - 1000; // ensure immediate spawn
+                }
+            }
+            
             } catch(spawnErr) {
                 // Surface spawn errors visibly
                 ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,50);
@@ -4238,7 +4250,19 @@
             if (haloResumePauseUntil > Date.now()) waveLabel += ' HALO';
             if (!bgMusicBuffer) waveLabel += _musicLoadFailed ? ' M:FAIL' : ' M:LOAD';
             else if (!bgMusic || !bgMusic.source) waveLabel += ' M:OFF';
+            if (redKingDefeated && redKingPauseTime > 0) waveLabel += ' t' + Math.floor((Date.now() - redKingPauseTime)/1000) + 's';
             ctx.fillText(waveLabel, 4, canvas.height - 4);
+            
+            // BIG visible warning if stuck post-Red King
+            if (redKingDefeated && enemies.length === 0 && !goldCrownPhase && !goldCrownDefeated) {
+                const stuckTime = Math.floor((Date.now() - redKingPauseTime) / 1000);
+                if (stuckTime > 6) {
+                    ctx.font = 'bold 14px monospace';
+                    ctx.fillStyle = 'rgba(255,0,0,0.5)';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('STUCK? w' + currentWave + ' wp' + (wavePause>0?1:0) + ' bi' + waveBurstIndex + ' t' + stuckTime + 's', canvas.width/2, canvas.height - 20);
+                }
+            }
             
             // No end button — hang IS the end
             endBtnRect = null;
