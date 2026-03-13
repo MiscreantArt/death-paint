@@ -2000,17 +2000,21 @@
                     this.behaviorTimer += frameDt * 60;
 
                     if (this.behaviorState === 'walk') {
-                        // Chase player normally
-                        const dx = player.x - this.x;
-                        const dy = player.y - this.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist > 0) {
-                            const finalSpeed = this.speed * enemySpeedMultiplier;
-                            this.x += (dx / dist) * finalSpeed * frameDt * 60;
-                            this.y += (dy / dist) * finalSpeed * frameDt * 60;
-                            this.currentDirection = this.getCardinalDirection(dx, dy);
+                        // WANDER randomly — NOT chase the hero
+                        if (!this.wanderAngle || this.behaviorTimer % 40 < 1) {
+                            // Pick a new random wander direction every ~0.7s
+                            this.wanderAngle = Math.random() * Math.PI * 2;
                         }
-                        if (this.behaviorTimer >= 120) { // 2 seconds
+                        const finalSpeed = this.speed * enemySpeedMultiplier * 0.7;
+                        let wx = Math.cos(this.wanderAngle) * finalSpeed * frameDt * 60;
+                        let wy = Math.sin(this.wanderAngle) * finalSpeed * frameDt * 60;
+                        // Bounce off edges
+                        if (this.x + wx < 20 || this.x + wx > canvas.width - 20) this.wanderAngle = Math.PI - this.wanderAngle;
+                        if (this.y + wy < 20 || this.y + wy > canvas.height - 20) this.wanderAngle = -this.wanderAngle;
+                        this.x += Math.cos(this.wanderAngle) * finalSpeed * frameDt * 60;
+                        this.y += Math.sin(this.wanderAngle) * finalSpeed * frameDt * 60;
+                        this.currentDirection = this.getCardinalDirection(Math.cos(this.wanderAngle), Math.sin(this.wanderAngle));
+                        if (this.behaviorTimer >= 120) { // 2 seconds of wandering
                             this.behaviorState = 'pause';
                             this.behaviorTimer = 0;
                         }
@@ -2019,26 +2023,26 @@
                         if (this.behaviorTimer >= 30) { // 0.5 seconds
                             this.behaviorState = 'spin';
                             this.behaviorTimer = 0;
-                            this.spinFrame = 0;
                         }
                     } else if (this.behaviorState === 'spin') {
-                        // Cycle through directions: east->south->west->north
+                        // Cycle through directions like a top: east->south->west->north
                         const dirs = ['east', 'south', 'west', 'north'];
                         const cycleFrame = Math.floor(this.behaviorTimer / 8);
                         this.currentDirection = dirs[cycleFrame % 4];
-                        if (this.behaviorTimer >= 90) { // 1.5 seconds (several full spins)
-                            this.behaviorState = 'aim';
+                        if (this.behaviorTimer >= 90) { // 1.5 seconds spinning
+                            this.behaviorState = 'settle';
                             this.behaviorTimer = 0;
                         }
-                    } else if (this.behaviorState === 'aim') {
-                        // Face player
+                    } else if (this.behaviorState === 'settle') {
+                        // Settle and shake — warning before shooting
                         const dx = player.x - this.x;
                         const dy = player.y - this.y;
                         this.currentDirection = this.getCardinalDirection(dx, dy);
-                        if (this.behaviorTimer >= 18) { // 0.3 seconds
+                        // Shake effect handled in draw()
+                        if (this.behaviorTimer >= 40) { // ~0.7 seconds to aim and shake
                             this.behaviorState = 'shoot';
                             this.behaviorTimer = 0;
-                            // Fire purple projectile
+                            // Fire purple projectile toward hero
                             const angle = Math.atan2(player.y - this.y, player.x - this.x);
                             const proj = {
                                 x: this.x,
@@ -2049,17 +2053,18 @@
                                 color: '#9933ff',
                                 isEnemy: true,
                                 damage: 1,
-                                life: 120, // Max distance
-                                trail: [] // Purple paint trail
+                                life: 120,
+                                isPurpleLaser: true
                             };
                             projectiles.push(proj);
-                            playSound('enemy-shoot');
+                            playSound('enemy-hit');
                         }
                     } else if (this.behaviorState === 'shoot') {
-                        // Brief pause after shooting
-                        if (this.behaviorTimer >= 10) {
+                        // Brief pause after shooting, then wander again
+                        if (this.behaviorTimer >= 15) {
                             this.behaviorState = 'walk';
                             this.behaviorTimer = 0;
+                            this.wanderAngle = Math.random() * Math.PI * 2;
                         }
                     }
 
@@ -2230,6 +2235,13 @@
                 // Gold King shake when about to spawn minions
                 if (this.isGoldCrown && this.shakeTimer > 0) {
                     ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
+                }
+                
+                // Robot minion settle shake — warning before shooting
+                if ((this.isRobotMinion1 || this.isRobotMinion2) && this.behaviorState === 'settle') {
+                    ctx.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
+                    ctx.shadowColor = 'rgba(153,51,255,0.6)';
+                    ctx.shadowBlur = 12;
                 }
                 
                 // Gold minion split warning shake
