@@ -4315,6 +4315,11 @@
         function handleTouchStart(e) {
             e.preventDefault();
             initAudio();
+            // Force music if it should be playing but isn't
+            if (gameState === 'playing' && (!bgMusic || !bgMusic.source)) {
+                if (audioCtx && audioCtx.state !== 'running') audioCtx.resume();
+                startMusic();
+            }
             if (gameState === 'gallery') {
                 // In gallery view — check buttons
                 if (e.touches.length > 0) {
