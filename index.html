@@ -76,7 +76,7 @@
         }
 
         // Game state
-        let gameState = 'menu'; // menu, playing, dying, gameOver, gallery, tutorial, preroll
+        let gameState = 'loading'; // loading, menu, playing, dying, gameOver, gallery, tutorial, preroll
         let dyingStartTime = 0;
         let dyingEnemiesExploded = false;
         let dyingDriftPixels = []; // pixels that drift outward after death
@@ -4088,7 +4088,9 @@
                 return;
             }
             
-            if (gameState === 'menu') {
+            if (gameState === 'loading') {
+                drawLoading();
+            } else if (gameState === 'menu') {
                 drawMenu();
             } else if (gameState === 'tutorial') {
                 drawTutorial();
@@ -4380,6 +4382,68 @@
                     color: menuColors[Math.floor(Math.random() * menuColors.length)],
                     alpha: 0.3 + Math.random() * 0.4
                 });
+            }
+        }
+
+        function drawLoading() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Title
+            ctx.font = '24px Georgia, serif';
+            ctx.fillStyle = '#4a3520';
+            ctx.textAlign = 'center';
+            ctx.fillText('Death Paint', canvas.width / 2, canvas.height * 0.3);
+            
+            // Loading progress
+            const totalAssets = 2; // music + critical sprites
+            let loadedAssets = 0;
+            
+            // Check music loading
+            const musicReady = bgMusicBuffer !== null;
+            if (musicReady) loadedAssets++;
+            
+            // Check critical sprites (hero + a few enemies)
+            const heroReady = sprites.heroSheets['2755'] && sprites.heroSheets['2755'].complete;
+            if (heroReady) loadedAssets++;
+            
+            // Progress bar
+            const barW = canvas.width * 0.6;
+            const barH = 20;
+            const barX = (canvas.width - barW) / 2;
+            const barY = canvas.height * 0.5;
+            
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(barX, barY, barW, barH);
+            
+            if (loadedAssets > 0) {
+                ctx.fillStyle = '#4caf50';
+                ctx.fillRect(barX, barY, (barW * loadedAssets) / totalAssets, barH);
+            }
+            
+            // Progress text
+            ctx.font = '14px Arial, sans-serif';
+            ctx.fillStyle = '#666';
+            const pct = Math.floor((loadedAssets / totalAssets) * 100);
+            ctx.fillText(`Loading... ${pct}%`, canvas.width / 2, barY + 40);
+            
+            // Status details
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#999';
+            let statusY = barY + 70;
+            
+            ctx.fillText(musicReady ? '✓ Music' : '○ Music...', canvas.width / 2, statusY);
+            statusY += 20;
+            ctx.fillText(heroReady ? '✓ Sprites' : '○ Sprites...', canvas.width / 2, statusY);
+            
+            // Check if loading complete
+            if (loadedAssets >= totalAssets) {
+                // Short delay before transitioning to menu
+                if (!window.loadingCompleteTime) {
+                    window.loadingCompleteTime = Date.now();
+                } else if (Date.now() - window.loadingCompleteTime > 500) {
+                    gameState = 'menu';
+                }
             }
         }
 
@@ -5228,7 +5292,11 @@
         function handleClick() {
             try {
                 initAudio(); // Init AudioContext on first user gesture (mobile requirement)
-                if (gameState === 'menu') {
+                if (gameState === 'loading') {
+                    // Kick start audio/music loading on first touch
+                    prepareMusic();
+                    playSound('menu-tap');
+                } else if (gameState === 'menu') {
                     playSound('menu-tap');
                     prepareMusic(); // Unlock audio element during gesture for iOS
                     // Tutorial every time with skip option
@@ -5785,6 +5853,18 @@
                     new Promise(resolve => setTimeout(resolve, 15000)) // 15s timeout
                 ]);
             } catch(e) { console.warn('Sprite load error (non-fatal):', e); }
+            
+            // Try to initialize audio early (may fail due to autoplay policy)
+            try {
+                // Don't wait for user interaction - just try
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') {
+                    // Will need user interaction later
+                    console.log('AudioContext suspended - waiting for user interaction');
+                }
+            } catch(e) {
+                console.log('Audio init will wait for user interaction');
+            }
             
             // Set initial mouse position
             mouse.x = canvas.width / 2;
