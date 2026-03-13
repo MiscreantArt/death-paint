@@ -90,7 +90,7 @@
         let gamePaused = false;
         
         // Halo power-up variables
-        let hasHalo = false;  // Player has a stored halo (extra life)
+        let haloCount = 0;  // Player's stored halos (extra lives), max 2
         let haloReviving = false;  // Currently in halo revive animation
         let haloReviveTime = 0;
         let haloHeroY = 0;  // Y position of descending halo hero
@@ -2201,7 +2201,7 @@
                         // Extra life — store it, don't use immediately
                         playSound('chromie-shockwave');  // reuse the big sound
                         haptic([20, 10, 20, 10, 30, 20, 40]);
-                        hasHalo = true;
+                        haloCount = Math.min(haloCount + 1, 2);
                         // Brief flash as halo hero (swap sprite for 30 frames)
                         haloFlashTimer = 30;
                         break;
@@ -2901,8 +2901,8 @@
                                     }
                                 });
                                 
-                                // Drop halo if player doesn't have one
-                                if (!hasHalo) {
+                                // Drop halo if player has room (max 2)
+                                if (haloCount < 2) {
                                     powerUps.push(new PowerUp(enemy.x, enemy.y, 'halo'));
                                     playSound('powerup-spawn');
                                 }
@@ -2926,7 +2926,7 @@
                                 });
                                 
                                 // Drop halo reward
-                                if (!hasHalo) {
+                                if (haloCount < 2) {
                                     powerUps.push(new PowerUp(enemy.x, enemy.y, 'halo'));
                                     playSound('powerup-spawn');
                                 }
@@ -3120,9 +3120,9 @@
             
             // Check death — trigger the death sequence
             if (player.health <= 0 && gameState === 'playing') {
-                if (hasHalo) {
+                if (haloCount > 0) {
                     // HALO REVIVE — play full death + fireworks, then revive
-                    hasHalo = false;
+                    haloCount--;
                     gameState = 'dying';
                     dyingStartTime = Date.now();
                     dyingEnemiesExploded = false;
@@ -4211,17 +4211,19 @@
             ctx.fillStyle = '#4a3520';
             ctx.fillText('hang art', hangX + hangW/2, btnY2 + 20);
             
-            // Halo icon if player has one — fits inside toolbar
-            if (hasHalo) {
+            // Halo icons — up to 2, shown in toolbar
+            if (haloCount > 0) {
                 const haloIcon = sprites.powerUps.halo;
                 if (haloIcon && haloIcon.complete && haloIcon.naturalWidth > 0) {
                     const iconSize = 90;
-                    const iconX = hangX + hangW + 4;
-                    const iconY = btnY2 + 2;
-                    ctx.globalAlpha = 0.85;
-                    try {
-                        ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
-                    } catch (e) {}
+                    for (let hi = 0; hi < haloCount; hi++) {
+                        const iconX = hangX + hangW + 4 + hi * (iconSize * 0.55);
+                        const iconY = btnY2 + 2;
+                        ctx.globalAlpha = hi === 0 ? 0.85 : 0.55;
+                        try {
+                            ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
+                        } catch (e) {}
+                    }
                     ctx.globalAlpha = 1;
                 }
             }
@@ -4747,7 +4749,7 @@
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
             goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
-            hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
+            haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
 
         function startGame() {
@@ -4818,7 +4820,7 @@
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
             goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
-            hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
+            haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
         
         function restartGame() {
