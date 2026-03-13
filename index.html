@@ -259,16 +259,21 @@
             prepareMusic();
         }
 
+        let _musicLoadFailed = false;
         function prepareMusic() {
             // Preload music as AudioBuffer — no HTML Audio element needed
             if (!bgMusicBuffer && !bgMusic?._loading && audioCtx) {
                 const m = { _loading: true };
                 bgMusic = m;
+                _musicLoadFailed = false;
                 fetch('sounds/starshore-save-point.mp3')
-                    .then(r => r.arrayBuffer())
+                    .then(r => {
+                        if (!r.ok) throw new Error('Music fetch failed: ' + r.status);
+                        return r.arrayBuffer();
+                    })
                     .then(buf => audioCtx.decodeAudioData(buf))
                     .then(decoded => { bgMusicBuffer = decoded; bgMusic = null; })
-                    .catch(() => { bgMusic = null; });
+                    .catch(err => { bgMusic = null; _musicLoadFailed = true; console.warn('Music load error:', err); });
             }
         }
         let _musicRetryInterval = null;
@@ -279,8 +284,11 @@
             // Re-resume AudioContext in case iOS suspended it during tutorial
             if (audioCtx.state !== 'running') audioCtx.resume();
             if (!bgMusicBuffer) {
+                // Retry loading if it failed
+                if (_musicLoadFailed) prepareMusic();
                 // Buffer still loading — retry every 500ms until it's ready
                 _musicRetryInterval = setInterval(() => {
+                    if (_musicLoadFailed) prepareMusic();
                     if (bgMusicBuffer && gameState === 'playing') {
                         clearInterval(_musicRetryInterval);
                         _musicRetryInterval = null;
@@ -4228,6 +4236,8 @@
             waveLabel += ' wp' + (wavePause > 0 ? 1 : 0);
             waveLabel += ' bi' + waveBurstIndex + '/' + burstSpawned;
             if (haloResumePauseUntil > Date.now()) waveLabel += ' HALO';
+            if (!bgMusicBuffer) waveLabel += _musicLoadFailed ? ' M:FAIL' : ' M:LOAD';
+            else if (!bgMusic || !bgMusic.source) waveLabel += ' M:OFF';
             ctx.fillText(waveLabel, 4, canvas.height - 4);
             
             // No end button — hang IS the end
