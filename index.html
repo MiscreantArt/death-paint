@@ -2335,6 +2335,7 @@
         let redKingDefeated = false;
         let redKingPauseTime = 0;
         let redKingSpawnTime = 0;
+        let postRedKingWavesStarted = false;
         
         // Gold Crown boss phase
         let goldCrownPhase = false;
@@ -2700,12 +2701,14 @@
                     enemies.push(new Enemy(pos.x, pos.y, false, 'redMinion'));
                     lastEnemySpawnTime = currentTime;
                 }
-            } else if (redKingDefeated && currentWave === 6 && wavePause === 0) {
-                // Post-Red King: 3.5s breathing room then start waves 6-9
+            } else if (redKingDefeated && !postRedKingWavesStarted) {
+                // Post-Red King: 3.5s breathing room then start waves 6-9 (fires ONCE)
                 const timeSinceRK = Date.now() - redKingPauseTime;
                 if (timeSinceRK < 3500) { /* breathing room */ }
-                else if (Date.now() < haloResumePauseUntil && timeSinceRK < 10000) { /* halo grace, but timeout after 10s */ }
+                else if (Date.now() < haloResumePauseUntil && timeSinceRK < 10000) { /* halo grace */ }
                 else {
+                    postRedKingWavesStarted = true;
+                    currentWave = 6;
                     wavePause = Date.now();
                     waveBurstIndex = 0;
                     burstSpawned = 0;
@@ -2785,18 +2788,6 @@
                 }
                 } // end else (not breathing)
             }
-            // Safety: if stuck post-boss for 15+ seconds with no enemies, force wave forward
-            if (redKingDefeated && !goldCrownPhase && !goldCrownDefeated && enemies.length === 0 && redKingPauseTime > 0) {
-                const stuck = Date.now() - redKingPauseTime;
-                if (stuck > 15000 && currentWave <= 9) {
-                    wavePause = 0;
-                    waveBurstIndex = 0;
-                    burstSpawned = 0;
-                    if (currentWave < 6) currentWave = 6;
-                    lastEnemySpawnTime = Date.now() - 1000; // ensure immediate spawn
-                }
-            }
-            
             } catch(spawnErr) {
                 // Surface spawn errors visibly
                 ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,50);
@@ -4250,19 +4241,7 @@
             if (haloResumePauseUntil > Date.now()) waveLabel += ' HALO';
             if (!bgMusicBuffer) waveLabel += _musicLoadFailed ? ' M:FAIL' : ' M:LOAD';
             else if (!bgMusic || !bgMusic.source) waveLabel += ' M:OFF';
-            if (redKingDefeated && redKingPauseTime > 0) waveLabel += ' t' + Math.floor((Date.now() - redKingPauseTime)/1000) + 's';
             ctx.fillText(waveLabel, 4, canvas.height - 4);
-            
-            // BIG visible warning if stuck post-Red King
-            if (redKingDefeated && enemies.length === 0 && !goldCrownPhase && !goldCrownDefeated) {
-                const stuckTime = Math.floor((Date.now() - redKingPauseTime) / 1000);
-                if (stuckTime > 6) {
-                    ctx.font = 'bold 14px monospace';
-                    ctx.fillStyle = 'rgba(255,0,0,0.5)';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('STUCK? w' + currentWave + ' wp' + (wavePause>0?1:0) + ' bi' + waveBurstIndex + ' t' + stuckTime + 's', canvas.width/2, canvas.height - 20);
-                }
-            }
             
             // No end button — hang IS the end
             endBtnRect = null;
@@ -4341,8 +4320,11 @@
             initAudio();
             // Force music if it should be playing but isn't
             if (gameState === 'playing' && (!bgMusic || !bgMusic.source)) {
-                if (audioCtx && audioCtx.state !== 'running') audioCtx.resume();
-                startMusic();
+                if (audioCtx) {
+                    if (audioCtx.state !== 'running') audioCtx.resume();
+                    if (!bgMusicBuffer) prepareMusic();
+                    startMusic();
+                }
             }
             if (gameState === 'gallery') {
                 // In gallery view — check buttons
@@ -4763,7 +4745,7 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
-            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
+            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
             goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
             hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
@@ -4834,7 +4816,7 @@
             if (stars.length === 0) initStars();
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
-            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0;
+            redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
             goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0;
             hasHalo = false; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
         }
