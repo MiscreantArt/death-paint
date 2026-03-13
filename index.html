@@ -1936,6 +1936,12 @@
                         }
                     }
 
+                    // Safety: initialize laser properties if missing
+                    if (typeof this.laserActiveTimer !== 'number') this.laserActiveTimer = 0;
+                    if (typeof this.laserChargeTimer !== 'number') this.laserChargeTimer = 300;
+                    if (typeof this.laserX !== 'number') this.laserX = this.x;
+                    if (typeof this.laserSweepDir !== 'number') this.laserSweepDir = 1;
+                    
                     // Laser attack cycle: charge 1s, then fire 2s laser
                     if (this.laserActiveTimer > 0) {
                         // Laser is firing
@@ -1997,6 +2003,10 @@
 
                 // Robot minions: walk-pause-spin-aim-shoot cycle
                 if (this.isRobotMinion1 || this.isRobotMinion2) {
+                    // Safety: initialize behavior if missing
+                    if (typeof this.behaviorTimer !== 'number') this.behaviorTimer = 0;
+                    if (typeof this.behaviorState !== 'string') this.behaviorState = 'walk';
+                    
                     this.behaviorTimer += frameDt * 60;
 
                     if (this.behaviorState === 'walk') {
@@ -2247,7 +2257,7 @@
                 }
                 
                 // Robot minion settle shake — warning before shooting
-                if ((this.isRobotMinion1 || this.isRobotMinion2) && this.behaviorState === 'settle') {
+                if ((this.isRobotMinion1 || this.isRobotMinion2) && this.behaviorState === 'settle' && typeof this.behaviorState === 'string') {
                     ctx.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
                     ctx.shadowColor = 'rgba(153,51,255,0.6)';
                     ctx.shadowBlur = 12;
@@ -4152,7 +4162,7 @@
 
                 // Draw Robot Girl laser beam
                 const robotBoss = enemies.find(e => e.isRobotGirl);
-                if (robotBoss && robotBoss.laserActiveTimer > 0) {
+                if (robotBoss && typeof robotBoss.laserActiveTimer === 'number' && robotBoss.laserActiveTimer > 0) {
                     ctx.save();
                     // Glowing purple laser beam
                     const laserWidth = 35;
