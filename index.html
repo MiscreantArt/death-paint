@@ -2294,15 +2294,15 @@
                 
 
                 
-                // Draw sprite
-                const enemySpriteSheet = sprites.enemySheets[this.spriteId];
+                // Draw sprite - add safety checks
+                const enemySpriteSheet = sprites.enemySheets && sprites.enemySheets[this.spriteId];
                 
                 // Tier 4 and 5 enemies are bigger
                 const sizeMultiplier = this.tier === 5 ? 1.6 : this.tier === 4 ? 1.3 : 1;
                 const drawSize = this.size * sizeMultiplier;
                 
                 // Use the drawSprite helper function
-                if (!drawSprite(enemySpriteSheet, this.currentDirection, 'walk', this.animFrame, this.x, this.y, drawSize)) {
+                if (enemySpriteSheet && !drawSprite(enemySpriteSheet, this.currentDirection, 'walk', this.animFrame, this.x, this.y, drawSize)) {
                     // Ultimate fallback circle
                     ctx.fillStyle = '#ff4400';
                     ctx.beginPath();
@@ -4414,7 +4414,7 @@
             if (musicReady) loadedAssets++;
             
             // Check critical sprites (hero + a few enemies)
-            const heroReady = sprites.heroSheets['2755'] && sprites.heroSheets['2755'].complete;
+            const heroReady = sprites.heroSheet && sprites.heroSheet.complete;
             if (heroReady) loadedAssets++;
             
             // Progress bar
