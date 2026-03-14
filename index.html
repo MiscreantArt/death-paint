@@ -2164,6 +2164,7 @@
                         playSound('red-minion-explode');
                         this.health = 0;
                         this.exploded = true;
+                        this._markedDead = true;
                     }
                 }
                 
@@ -2810,36 +2811,36 @@
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2400 },
                 { count: 3, types: ['grunt', 'green', 'darkBoss'], delay: 2600 },
             ]},
-            // Wave 6: 16 total, bombers enter the normal mix lightly
+            // Wave 6: 16 total, bombers enter lightly (1 bomber)
             { bursts: [
                 { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 2300 },
-                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2300 },
+                { count: 4, types: ['darkBoss', 'grunt', 'green', 'whiteBoss'], delay: 2300 },
                 { count: 4, types: ['whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2300 },
                 { count: 4, types: ['grunt', 'redMinion', 'whiteBoss', 'darkBoss'], delay: 2500 },
             ]},
-            // Wave 7: 18 total, six bursts of 3, more later-wave pressure
+            // Wave 7: 18 total, bombers still light (2 bombers)
             { bursts: [
-                { count: 3, types: ['darkBoss', 'redMinion', 'grunt'], delay: 2200 },
+                { count: 3, types: ['darkBoss', 'grunt', 'green'], delay: 2200 },
                 { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 2200 },
                 { count: 3, types: ['redMinion', 'darkBoss', 'grunt'], delay: 2200 },
-                { count: 3, types: ['whiteBoss', 'redMinion', 'green'], delay: 2200 },
+                { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 2200 },
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2200 },
                 { count: 3, types: ['redMinion', 'darkBoss', 'green'], delay: 2400 },
             ]},
-            // Wave 8: 20 total, heavy ramp
+            // Wave 8: 20 total, bombers ramp up (3 bombers)
             { bursts: [
-                { count: 4, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss'], delay: 2000 },
+                { count: 4, types: ['darkBoss', 'grunt', 'green', 'whiteBoss'], delay: 2000 },
                 { count: 4, types: ['redMinion', 'darkBoss', 'green', 'grunt'], delay: 2000 },
-                { count: 4, types: ['whiteBoss', 'redMinion', 'darkBoss', 'grunt'], delay: 2000 },
+                { count: 4, types: ['whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2000 },
                 { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2000 },
                 { count: 4, types: ['redMinion', 'whiteBoss', 'darkBoss', 'grunt'], delay: 2200 },
             ]},
-            // Wave 9: 30 total — final wave before Gold King, 6×5 max pressure
+            // Wave 9: 30 total — final wave before Gold King, bombers peak (5 bombers)
             { bursts: [
                 { count: 6, types: ['grunt', 'green', 'whiteBoss', 'darkBoss', 'redMinion', 'grunt'], delay: 2000 },
-                { count: 6, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 2000 },
-                { count: 6, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss', 'green', 'redMinion'], delay: 2100 },
-                { count: 6, types: ['redMinion', 'darkBoss', 'whiteBoss', 'grunt', 'green', 'grunt'], delay: 2100 },
+                { count: 6, types: ['darkBoss', 'grunt', 'grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 2000 },
+                { count: 6, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss', 'green', 'grunt'], delay: 2100 },
+                { count: 6, types: ['grunt', 'darkBoss', 'whiteBoss', 'grunt', 'green', 'redMinion'], delay: 2100 },
                 { count: 6, types: ['darkBoss', 'redMinion', 'whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2200 },
             ]},
             // === POST-GOLD KING WAVES (11-15) — gold minions in the mix, leads to final boss ===
