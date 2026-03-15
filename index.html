@@ -4458,6 +4458,11 @@
                     gameState = 'menu';
                 }
             }
+            // Don't get stuck — if sprites loaded but music won't load, move on
+            if (!window._loadScreenStart) window._loadScreenStart = Date.now();
+            if (heroReady && Date.now() - window._loadScreenStart > 6000) {
+                gameState = 'menu';
+            }
         }
 
         function drawMenu() {
