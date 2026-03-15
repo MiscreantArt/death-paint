@@ -260,6 +260,8 @@
         }
 
         let _musicLoadFailed = false;
+        let _audioCheckTimer = 0;
+        let _wave11StuckTimer = 0;
         function prepareMusic() {
             // Preload music as AudioBuffer — no HTML Audio element needed
             if (!bgMusicBuffer && !bgMusic?._loading && audioCtx) {
@@ -2941,6 +2943,20 @@
             // Hit-pause: skip update frames for kill impact feel
             if (hitPause > 0) { hitPause -= 1; return; }
             
+            // Periodic audio health check — every ~2 seconds during gameplay
+            if (gameState === 'playing' && audioCtx) {
+                _audioCheckTimer = (_audioCheckTimer || 0) + dt;
+                if (_audioCheckTimer > 2) {
+                    _audioCheckTimer = 0;
+                    if (audioCtx.state !== 'running') {
+                        audioCtx.resume().catch(() => {});
+                    } else if (!bgMusic || !bgMusic.source) {
+                        if (!bgMusicBuffer) prepareMusic();
+                        else startMusic();
+                    }
+                }
+            }
+            
             // Crown freeze global timer
             if (playerBuffs.crown > 0) {
                 playerBuffs.crown -= frameDt * 60;
@@ -3237,6 +3253,14 @@
                 }
             } else if (currentWave === 11 && !goldCrownDefeated && !goldCrownPhase) {
                 // After wave 10: Gold King boss
+                // Failsafe: if enemies.length > 0 but no real enemies for 10s, force clear (zombie cleanup)
+                if (enemies.length > 0 && !goldCrownPauseTime) {
+                    if (!_wave11StuckTimer) _wave11StuckTimer = currentTime;
+                    if (currentTime - _wave11StuckTimer > 10000) {
+                        enemies = [];
+                        _wave11StuckTimer = 0;
+                    }
+                } else { _wave11StuckTimer = 0; }
                 if (enemies.length === 0) {
                     if (!goldCrownPauseTime) {
                         goldCrownPauseTime = currentTime;
@@ -3252,6 +3276,17 @@
             } else if (goldCrownPhase) {
                 // Gold King spawns his own minions via minionSpawnTimer in his update() method
                 // No external trickle spawning needed
+                // Failsafe: if Gold King phase stuck for 60s+ (no gold king in enemies), force transition
+                if (goldCrownSpawnTime && currentTime - goldCrownSpawnTime > 60000) {
+                    const goldKingAlive = enemies.some(e => e.isGoldCrown);
+                    if (!goldKingAlive) {
+                        goldCrownPhase = false;
+                        goldCrownDefeated = true;
+                        goldCrownPauseTime = Date.now();
+                        // Clear any leftover minions
+                        enemies.forEach(e => { if (e.isGoldMinion1 || e.isGoldMinion2 || e.isRedMinion) e._markedDead = true; });
+                    }
+                }
             } else if (goldCrownDefeated && !postGoldCrownWavesStarted) {
                 // Post-Gold King: 3.5s breathing room then start waves 11-15
                 const timeSinceGC = Date.now() - goldCrownPauseTime;
@@ -3313,6 +3348,16 @@
             } else if (robotGirlPhase) {
                 // Robot Girl spawns her own minions via minionSpawnTimer in her update() method
                 // No external trickle spawning needed
+                // Failsafe: if Robot Girl phase stuck for 90s+ (no robot girl in enemies), force transition
+                if (robotGirlSpawnTime && currentTime - robotGirlSpawnTime > 90000) {
+                    const robotAlive = enemies.some(e => e.isRobotGirl);
+                    if (!robotAlive) {
+                        robotGirlPhase = false;
+                        robotGirlDefeated = true;
+                        // Clear leftover minions
+                        enemies.forEach(e => { if (e.isRobotMinion1 || e.isRobotMinion2) e._markedDead = true; });
+                    }
+                }
             } else if (robotGirlDefeated || currentWave > 16) {
                 // After Robot Girl defeated: check for win condition or free-for-all
                 if (canvasCoverage >= 0.99 && gameState === 'playing') {
@@ -5741,7 +5786,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
-            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false; _wave11StuckTimer = 0; _audioCheckTimer = 0;
             robotGirlPhase = false; robotGirlDefeated = false; robotGirlPauseTime = 0; robotGirlSpawnTime = 0;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
             victoryStartTime = 0; victoryDanceEnemies = [];
@@ -5765,16 +5810,17 @@
             rainbowTimer = 0;
             gameState = 'playing';
             startMusic();
-            // Belt-and-suspenders retry for mobile Safari/tutorial-skip audio weirdness
-            setTimeout(() => {
-                if (gameState !== 'playing') return;
-                initAudio();
-                if (audioCtx && audioCtx.state !== 'running') {
-                    audioCtx.resume().catch(() => {});
-                }
-                if (!bgMusicBuffer) prepareMusic();
-                if (!bgMusic || !bgMusic.source) startMusic();
-            }, 120);
+            // Aggressive audio recovery chain — iOS can take up to 1s+ to resume
+            [200, 500, 1500, 3000].forEach(delay => {
+                setTimeout(() => {
+                    if (gameState !== 'playing') return;
+                    if (audioCtx && audioCtx.state !== 'running') {
+                        audioCtx.resume().catch(() => {});
+                    }
+                    if (!bgMusicBuffer) prepareMusic();
+                    if (!bgMusic || !bgMusic.source) startMusic();
+                }, delay);
+            });
             score = 0;
             killCount = 0;
             
@@ -5832,7 +5878,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
-            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false; _wave11StuckTimer = 0; _audioCheckTimer = 0;
             robotGirlPhase = false; robotGirlDefeated = false; robotGirlPauseTime = 0; robotGirlSpawnTime = 0;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
             victoryStartTime = 0; victoryDanceEnemies = [];
