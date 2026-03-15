@@ -76,6 +76,7 @@
         }
 
         // Game state
+        const DEPLOY_MARKER = 'deploy test 2026-03-15';
         let gameState = 'loading'; // loading, menu, playing, dying, gameOver, gallery, tutorial, preroll
         let dyingStartTime = 0;
         let dyingEnemiesExploded = false;
@@ -4494,6 +4495,10 @@
             ctx.fillStyle = '#222222';
             ctx.fillText('TAP TO PLAY', canvas.width / 2, canvas.height * 0.78);
             ctx.globalAlpha = 1;
+
+            ctx.font = `${Math.max(10, Math.floor(canvas.width / 36))}px monospace`;
+            ctx.fillStyle = '#666666';
+            ctx.fillText(DEPLOY_MARKER, canvas.width / 2, canvas.height * 0.92);
         }
         
         let skipButtonRect = null;
