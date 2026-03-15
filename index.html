@@ -2808,8 +2808,8 @@
                 { count: 5, types: ['whiteBoss', 'darkBoss', 'grunt', 'green', 'darkBoss'], delay: 3000 },
                 { count: 5, types: ['grunt', 'whiteBoss', 'darkBoss', 'green', 'whiteBoss'], delay: 3000 },
             ]},
-            // === POST-RED KING WAVES (6-9) — stricter escalation into Gold Crown ===
-            // Wave 5: 15 total, still readable, no bombers yet
+            // === POST-RED KING WAVES (6-10) — bomber % ramps up each wave ===
+            // Wave 6: 15 total, no bombers yet (bomberChance handled in spawner)
             { bursts: [
                 { count: 3, types: ['grunt', 'green', 'whiteBoss'], delay: 2400 },
                 { count: 3, types: ['grunt', 'green', 'darkBoss'], delay: 2400 },
@@ -2817,37 +2817,37 @@
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2400 },
                 { count: 3, types: ['grunt', 'green', 'darkBoss'], delay: 2600 },
             ]},
-            // Wave 6: 16 total, bombers enter the normal mix lightly
+            // Wave 7: 16 total
             { bursts: [
                 { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 2300 },
-                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2300 },
+                { count: 4, types: ['darkBoss', 'grunt', 'green', 'whiteBoss'], delay: 2300 },
                 { count: 4, types: ['whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2300 },
-                { count: 4, types: ['grunt', 'redMinion', 'whiteBoss', 'darkBoss'], delay: 2500 },
+                { count: 4, types: ['grunt', 'darkBoss', 'whiteBoss', 'green'], delay: 2500 },
             ]},
-            // Wave 7: 18 total, six bursts of 3, more later-wave pressure
+            // Wave 8: 18 total
             { bursts: [
-                { count: 3, types: ['darkBoss', 'redMinion', 'grunt'], delay: 2200 },
+                { count: 3, types: ['darkBoss', 'grunt', 'green'], delay: 2200 },
                 { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 2200 },
-                { count: 3, types: ['redMinion', 'darkBoss', 'grunt'], delay: 2200 },
-                { count: 3, types: ['whiteBoss', 'redMinion', 'green'], delay: 2200 },
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2200 },
-                { count: 3, types: ['redMinion', 'darkBoss', 'green'], delay: 2400 },
+                { count: 3, types: ['whiteBoss', 'green', 'darkBoss'], delay: 2200 },
+                { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2200 },
+                { count: 3, types: ['grunt', 'darkBoss', 'green'], delay: 2400 },
             ]},
-            // Wave 8: 20 total, heavy ramp
+            // Wave 9: 20 total
             { bursts: [
-                { count: 4, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss'], delay: 2000 },
-                { count: 4, types: ['redMinion', 'darkBoss', 'green', 'grunt'], delay: 2000 },
-                { count: 4, types: ['whiteBoss', 'redMinion', 'darkBoss', 'grunt'], delay: 2000 },
-                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2000 },
-                { count: 4, types: ['redMinion', 'whiteBoss', 'darkBoss', 'grunt'], delay: 2200 },
+                { count: 4, types: ['darkBoss', 'grunt', 'green', 'whiteBoss'], delay: 2000 },
+                { count: 4, types: ['whiteBoss', 'darkBoss', 'green', 'grunt'], delay: 2000 },
+                { count: 4, types: ['grunt', 'whiteBoss', 'darkBoss', 'green'], delay: 2000 },
+                { count: 4, types: ['darkBoss', 'grunt', 'whiteBoss', 'green'], delay: 2000 },
+                { count: 4, types: ['grunt', 'whiteBoss', 'darkBoss', 'green'], delay: 2200 },
             ]},
-            // Wave 9: 30 total — final wave before Gold King, 6×5 max pressure
+            // Wave 10: 30 total — final wave before Gold King
             { bursts: [
-                { count: 6, types: ['grunt', 'green', 'whiteBoss', 'darkBoss', 'redMinion', 'grunt'], delay: 2000 },
-                { count: 6, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 2000 },
-                { count: 6, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss', 'green', 'redMinion'], delay: 2100 },
-                { count: 6, types: ['redMinion', 'darkBoss', 'whiteBoss', 'grunt', 'green', 'grunt'], delay: 2100 },
-                { count: 6, types: ['darkBoss', 'redMinion', 'whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2200 },
+                { count: 6, types: ['grunt', 'green', 'whiteBoss', 'darkBoss', 'grunt', 'green'], delay: 2000 },
+                { count: 6, types: ['darkBoss', 'grunt', 'whiteBoss', 'green', 'darkBoss', 'grunt'], delay: 2000 },
+                { count: 6, types: ['whiteBoss', 'grunt', 'darkBoss', 'green', 'grunt', 'whiteBoss'], delay: 2100 },
+                { count: 6, types: ['grunt', 'darkBoss', 'whiteBoss', 'green', 'grunt', 'darkBoss'], delay: 2100 },
+                { count: 6, types: ['darkBoss', 'grunt', 'whiteBoss', 'green', 'darkBoss', 'grunt'], delay: 2200 },
             ]},
             // === POST-GOLD KING WAVES (11-15) — gold minions in the mix, leads to final boss ===
             // Wave 11: 20 total, gold minions introduced lightly
@@ -3222,7 +3222,11 @@
                     if (burstSpawned < burst.count) {
                         if (enemies.length < waveMaxOnScreen && currentTime - lastEnemySpawnTime >= burstDelay) {
                             const pos = getEdgeSpawnPos();
-                            const type = burst.types[burstSpawned % burst.types.length];
+                            let type = burst.types[burstSpawned % burst.types.length];
+                            // Random bomber chance — ramps per wave, different every playthrough
+                            // Wave 6: 0%, Wave 7: 8%, Wave 8: 15%, Wave 9: 22%, Wave 10: 30%
+                            const bomberPct = [0, 0, 0, 0, 0, 0, 0.08, 0.15, 0.22, 0.30][currentWave - 1] || 0;
+                            if (bomberPct > 0 && Math.random() < bomberPct) type = 'redMinion';
                             enemies.push(new Enemy(pos.x, pos.y, false, type));
                             burstSpawned++;
                             lastEnemySpawnTime = currentTime;
