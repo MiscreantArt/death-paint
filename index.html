@@ -1684,7 +1684,7 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isRedMinion = true;
-                    this.fuseTimer = 180; // 3 seconds at 60fps
+                    this.fuseTimer = 240; // 4 seconds at 60fps
                     this.knockbackResist = 0.15; // low resist = bounces a lot
                 } else if (forceType === 'goldMinion1') {
                     // Gold Crown guard — chunkier bodyguard
@@ -2138,28 +2138,23 @@
 
                 }
                 
-                // Red Minion fuse countdown — explodes after 3 seconds regardless (not when frozen for death sequence)
+                // Red Minion fuse countdown — explodes after 4 seconds regardless (not when frozen for death sequence)
                 if (this.isRedMinion && !this.frozen) {
                     this.fuseTimer -= frameDt * 60;
                     if (this.fuseTimer <= 0) {
-                        // EXPLODE — bright flash effect
-                        particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,100,50,0.9)', 8, 2.5));
-                        particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,255,255,0.8)', 6, 2));
-                        // Red paint splat on canvas — behind and to sides of bomber
-                        const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444'];
-                        let dirOffset = 0;
-                        if (this.currentDirection === 'east') dirOffset = Math.PI;
-                        else if (this.currentDirection === 'west') dirOffset = 0;
-                        else if (this.currentDirection === 'south') dirOffset = -Math.PI/2;
-                        else if (this.currentDirection === 'north') dirOffset = Math.PI/2;
-                        for (let i = 0; i < 40; i++) {
-                            const spreadAngle = (Math.random() - 0.5) * Math.PI * 1.3;
-                            const angle = dirOffset + spreadAngle;
-                            const dist = Math.random() * 35;
-                            const t = new FireTrail(this.x + Math.cos(angle) * dist, this.y + Math.sin(angle) * dist);
-                            t.size = 1.5 + Math.random() * 2;
-                            t.color = redColors[Math.floor(Math.random() * redColors.length)];
-                            fireTrails.push(t);
+                        // EXPLODE — red paint bomb + shrapnel particles
+                        spawnPixelDeath(this.x, this.y, '#cc0000');
+                        // Explosion burst — fast red particles flying outward
+                        const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444', '#ff6600'];
+                        for (let i = 0; i < 30; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = 4 + Math.random() * 10;
+                            particles.push(new Particle(
+                                this.x, this.y,
+                                Math.cos(angle) * speed, Math.sin(angle) * speed,
+                                redColors[Math.floor(Math.random() * redColors.length)],
+                                10 + Math.floor(Math.random() * 15), 0.8 + Math.random()
+                            ));
                         }
                         const distToPlayer = Math.hypot(this.x - player.x, this.y - player.y);
                         if (distToPlayer < 80) {
@@ -2214,7 +2209,7 @@
                 // Knockback from projectile — red minions bounce back hard, bosses barely budge
                 // No knockback when frozen (crown freeze = completely stuck)
                 if (projectileAngle !== null && this.frozenTimer <= 0) {
-                    let knockbackForce = this.isRedMinion ? 15 : 8;
+                    let knockbackForce = this.isRedMinion ? 25 : 8;
                     // Red King: zero knockback (immovable). Gold King + Robot Girl: barely budge.
                     if (this.isRedKing) knockbackForce = 0;
                     else if (this.isGoldCrown || this.isRobotGirl) knockbackForce = 2;
@@ -2297,6 +2292,14 @@
                 // Hit flash effect (not for red minions — they're indestructible, no flash needed)
                 if (this.hitFlash > 0 && !this.isRedMinion) {
                     ctx.filter = 'brightness(3)';
+                }
+                
+                // Red Minion — flash faster as fuse runs out (last 1.5 seconds)
+                if (this.isRedMinion && this.fuseTimer < 90) {
+                    const flashRate = this.fuseTimer < 30 ? 3 : 6;
+                    if (Math.floor(this.fuseTimer / flashRate) % 2 === 0) {
+                        ctx.filter = 'brightness(2.5)';
+                    }
                 }
                 
                 // Draw sprite - add safety checks
