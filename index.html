@@ -260,8 +260,6 @@
         }
 
         let _musicLoadFailed = false;
-        let _audioCheckTimer = 0;
-        let _wave11StuckTimer = 0;
         function prepareMusic() {
             // Preload music as AudioBuffer — no HTML Audio element needed
             if (!bgMusicBuffer && !bgMusic?._loading && audioCtx) {
@@ -2815,36 +2813,36 @@
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2400 },
                 { count: 3, types: ['grunt', 'green', 'darkBoss'], delay: 2600 },
             ]},
-            // Wave 6: 16 total, bombers enter lightly (1 bomber)
+            // Wave 6: 16 total, bombers enter the normal mix lightly
             { bursts: [
                 { count: 4, types: ['grunt', 'green', 'whiteBoss', 'grunt'], delay: 2300 },
-                { count: 4, types: ['darkBoss', 'grunt', 'green', 'whiteBoss'], delay: 2300 },
+                { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2300 },
                 { count: 4, types: ['whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2300 },
                 { count: 4, types: ['grunt', 'redMinion', 'whiteBoss', 'darkBoss'], delay: 2500 },
             ]},
-            // Wave 7: 18 total, bombers still light (2 bombers)
+            // Wave 7: 18 total, six bursts of 3, more later-wave pressure
             { bursts: [
-                { count: 3, types: ['darkBoss', 'grunt', 'green'], delay: 2200 },
+                { count: 3, types: ['darkBoss', 'redMinion', 'grunt'], delay: 2200 },
                 { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 2200 },
                 { count: 3, types: ['redMinion', 'darkBoss', 'grunt'], delay: 2200 },
-                { count: 3, types: ['whiteBoss', 'grunt', 'green'], delay: 2200 },
+                { count: 3, types: ['whiteBoss', 'redMinion', 'green'], delay: 2200 },
                 { count: 3, types: ['darkBoss', 'grunt', 'whiteBoss'], delay: 2200 },
                 { count: 3, types: ['redMinion', 'darkBoss', 'green'], delay: 2400 },
             ]},
-            // Wave 8: 20 total, bombers ramp up (3 bombers)
+            // Wave 8: 20 total, heavy ramp
             { bursts: [
-                { count: 4, types: ['darkBoss', 'grunt', 'green', 'whiteBoss'], delay: 2000 },
+                { count: 4, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss'], delay: 2000 },
                 { count: 4, types: ['redMinion', 'darkBoss', 'green', 'grunt'], delay: 2000 },
-                { count: 4, types: ['whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2000 },
+                { count: 4, types: ['whiteBoss', 'redMinion', 'darkBoss', 'grunt'], delay: 2000 },
                 { count: 4, types: ['darkBoss', 'grunt', 'redMinion', 'green'], delay: 2000 },
                 { count: 4, types: ['redMinion', 'whiteBoss', 'darkBoss', 'grunt'], delay: 2200 },
             ]},
-            // Wave 9: 30 total — final wave before Gold King, bombers peak (5 bombers)
+            // Wave 9: 30 total — final wave before Gold King, 6×5 max pressure
             { bursts: [
                 { count: 6, types: ['grunt', 'green', 'whiteBoss', 'darkBoss', 'redMinion', 'grunt'], delay: 2000 },
-                { count: 6, types: ['darkBoss', 'grunt', 'grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 2000 },
-                { count: 6, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss', 'green', 'grunt'], delay: 2100 },
-                { count: 6, types: ['grunt', 'darkBoss', 'whiteBoss', 'grunt', 'green', 'redMinion'], delay: 2100 },
+                { count: 6, types: ['darkBoss', 'redMinion', 'grunt', 'whiteBoss', 'green', 'darkBoss'], delay: 2000 },
+                { count: 6, types: ['whiteBoss', 'grunt', 'redMinion', 'darkBoss', 'green', 'redMinion'], delay: 2100 },
+                { count: 6, types: ['redMinion', 'darkBoss', 'whiteBoss', 'grunt', 'green', 'grunt'], delay: 2100 },
                 { count: 6, types: ['darkBoss', 'redMinion', 'whiteBoss', 'grunt', 'darkBoss', 'green'], delay: 2200 },
             ]},
             // === POST-GOLD KING WAVES (11-15) — gold minions in the mix, leads to final boss ===
@@ -2942,20 +2940,6 @@
             if (gamePaused && (gameState === 'playing' || gameState === 'tutorial')) return;
             // Hit-pause: skip update frames for kill impact feel
             if (hitPause > 0) { hitPause -= 1; return; }
-            
-            // Periodic audio health check — every ~2 seconds during gameplay
-            if (gameState === 'playing' && audioCtx) {
-                _audioCheckTimer = (_audioCheckTimer || 0) + dt;
-                if (_audioCheckTimer > 2) {
-                    _audioCheckTimer = 0;
-                    if (audioCtx.state !== 'running') {
-                        audioCtx.resume().catch(() => {});
-                    } else if (!bgMusic || !bgMusic.source) {
-                        if (!bgMusicBuffer) prepareMusic();
-                        else startMusic();
-                    }
-                }
-            }
             
             // Crown freeze global timer
             if (playerBuffs.crown > 0) {
@@ -3253,14 +3237,6 @@
                 }
             } else if (currentWave === 11 && !goldCrownDefeated && !goldCrownPhase) {
                 // After wave 10: Gold King boss
-                // Failsafe: if enemies.length > 0 but no real enemies for 10s, force clear (zombie cleanup)
-                if (enemies.length > 0 && !goldCrownPauseTime) {
-                    if (!_wave11StuckTimer) _wave11StuckTimer = currentTime;
-                    if (currentTime - _wave11StuckTimer > 10000) {
-                        enemies = [];
-                        _wave11StuckTimer = 0;
-                    }
-                } else { _wave11StuckTimer = 0; }
                 if (enemies.length === 0) {
                     if (!goldCrownPauseTime) {
                         goldCrownPauseTime = currentTime;
@@ -3276,17 +3252,6 @@
             } else if (goldCrownPhase) {
                 // Gold King spawns his own minions via minionSpawnTimer in his update() method
                 // No external trickle spawning needed
-                // Failsafe: if Gold King phase stuck for 60s+ (no gold king in enemies), force transition
-                if (goldCrownSpawnTime && currentTime - goldCrownSpawnTime > 60000) {
-                    const goldKingAlive = enemies.some(e => e.isGoldCrown);
-                    if (!goldKingAlive) {
-                        goldCrownPhase = false;
-                        goldCrownDefeated = true;
-                        goldCrownPauseTime = Date.now();
-                        // Clear any leftover minions
-                        enemies.forEach(e => { if (e.isGoldMinion1 || e.isGoldMinion2 || e.isRedMinion) e._markedDead = true; });
-                    }
-                }
             } else if (goldCrownDefeated && !postGoldCrownWavesStarted) {
                 // Post-Gold King: 3.5s breathing room then start waves 11-15
                 const timeSinceGC = Date.now() - goldCrownPauseTime;
@@ -3348,16 +3313,6 @@
             } else if (robotGirlPhase) {
                 // Robot Girl spawns her own minions via minionSpawnTimer in her update() method
                 // No external trickle spawning needed
-                // Failsafe: if Robot Girl phase stuck for 90s+ (no robot girl in enemies), force transition
-                if (robotGirlSpawnTime && currentTime - robotGirlSpawnTime > 90000) {
-                    const robotAlive = enemies.some(e => e.isRobotGirl);
-                    if (!robotAlive) {
-                        robotGirlPhase = false;
-                        robotGirlDefeated = true;
-                        // Clear leftover minions
-                        enemies.forEach(e => { if (e.isRobotMinion1 || e.isRobotMinion2) e._markedDead = true; });
-                    }
-                }
             } else if (robotGirlDefeated || currentWave > 16) {
                 // After Robot Girl defeated: check for win condition or free-for-all
                 if (canvasCoverage >= 0.99 && gameState === 'playing') {
@@ -4494,14 +4449,6 @@
             statusY += 20;
             ctx.fillText(heroReady ? '✓ Sprites' : '○ Sprites...', canvas.width / 2, statusY);
             
-            // Tap hint — audio needs a gesture to start on mobile
-            if (!musicReady && window._loadingStartTime && Date.now() - window._loadingStartTime > 3000) {
-                statusY += 30;
-                ctx.font = '13px Arial';
-                ctx.fillStyle = '#aaa';
-                ctx.fillText('tap screen to load audio', canvas.width / 2, statusY);
-            }
-            
             // Check if loading complete
             if (loadedAssets >= totalAssets) {
                 // Short delay before transitioning to menu
@@ -4510,15 +4457,6 @@
                 } else if (Date.now() - window.loadingCompleteTime > 500) {
                     gameState = 'menu';
                 }
-            }
-            // Failsafe: if stuck on loading for 8s+ and sprites are ready, skip music wait
-            if (!window._loadingStartTime) window._loadingStartTime = Date.now();
-            if (heroReady && !musicReady && Date.now() - window._loadingStartTime > 8000) {
-                gameState = 'menu';
-            }
-            // Extreme failsafe: 15s, go to menu no matter what
-            if (Date.now() - window._loadingStartTime > 15000) {
-                gameState = 'menu';
             }
         }
 
@@ -5215,17 +5153,9 @@
                 
                 // Skip tutorial button
                 if (gameState === 'tutorial' && skipButtonRect && inBtn(skipButtonRect)) {
-                    initAudio();
-                    const doSkipStart = () => {
-                        playSound('menu-tap');
-                        prepareMusic();
-                        startGame();
-                    };
-                    if (audioCtx && audioCtx.state !== 'running') {
-                        audioCtx.resume().then(doSkipStart).catch(() => doSkipStart());
-                    } else {
-                        doSkipStart();
-                    }
+                    playSound('menu-tap');
+                    prepareMusic();
+                    startGame();
                     return;
                 }
                 if (inBtn(hangBtnGameRect)) {
@@ -5803,7 +5733,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
-            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false; _wave11StuckTimer = 0; _audioCheckTimer = 0;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
             robotGirlPhase = false; robotGirlDefeated = false; robotGirlPauseTime = 0; robotGirlSpawnTime = 0;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
             victoryStartTime = 0; victoryDanceEnemies = [];
@@ -5827,17 +5757,6 @@
             rainbowTimer = 0;
             gameState = 'playing';
             startMusic();
-            // Aggressive audio recovery chain — iOS can take up to 1s+ to resume
-            [200, 500, 1500, 3000].forEach(delay => {
-                setTimeout(() => {
-                    if (gameState !== 'playing') return;
-                    if (audioCtx && audioCtx.state !== 'running') {
-                        audioCtx.resume().catch(() => {});
-                    }
-                    if (!bgMusicBuffer) prepareMusic();
-                    if (!bgMusic || !bgMusic.source) startMusic();
-                }, delay);
-            });
             score = 0;
             killCount = 0;
             
@@ -5895,7 +5814,7 @@
             lastEnemySpawnTime = Date.now();
             currentWave = 1; waveBurstIndex = 0; burstSpawned = 0; wavePause = 0; firstFiveSpawned = 0;
             redKingPhase = false; redKingDefeated = false; redKingPauseTime = 0; redKingSpawnTime = 0; postRedKingWavesStarted = false;
-            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false; _wave11StuckTimer = 0; _audioCheckTimer = 0;
+            goldCrownPhase = false; goldCrownDefeated = false; goldCrownPauseTime = 0; goldCrownSpawnTime = 0; postGoldCrownWavesStarted = false;
             robotGirlPhase = false; robotGirlDefeated = false; robotGirlPauseTime = 0; robotGirlSpawnTime = 0;
             haloCount = 0; haloReviving = false; haloFlashTimer = 0; haloReviveCueStage = 0; haloTransformFlash = 0; haloResumePauseUntil = 0;
             victoryStartTime = 0; victoryDanceEnemies = [];
