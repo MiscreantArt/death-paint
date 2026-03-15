@@ -1685,8 +1685,6 @@
                     this.isGreen = false;
                     this.isRedMinion = true;
                     this.fuseTimer = 180; // 3 seconds at 60fps
-                    this.chargeTimer = 90; // Walk normally for 1.5s, then charge
-                    this.isCharging = false;
                     this.knockbackResist = 0.15; // low resist = bounces a lot
                 } else if (forceType === 'goldMinion1') {
                     // Gold Crown guard — chunkier bodyguard
@@ -2135,29 +2133,9 @@
                 }
                 
                 // Red Minion charging behavior
-                // Walk phase → Charge phase (speed burst + red trail) → Explode
+                // Red Minion fuse countdown — explodes after 4 seconds regardless (not when frozen for death sequence)
                 if (this.isRedMinion && !this.frozen) {
                     this.fuseTimer -= frameDt * 60;
-                    // Charge phase kicks in after chargeTimer expires
-                    if (!this.isCharging && this.chargeTimer !== undefined) {
-                        this.chargeTimer -= frameDt * 60;
-                        if (this.chargeTimer <= 0) {
-                            this.isCharging = true;
-                            this.speed *= 2.2; // Speed burst
-                            playSound('red-minion-explode'); // warning sound
-                        }
-                    }
-                    // While charging: leave red paint trail behind
-                    if (this.isCharging && Math.random() < 0.7 * frameDt * 60) {
-                        const redTrailColors = ['#cc0000', '#ff2222', '#990000', '#ff4444'];
-                        const t = new FireTrail(
-                            this.x + (Math.random() - 0.5) * 20,
-                            this.y + (Math.random() - 0.5) * 15
-                        );
-                        t.size = 2 + Math.random() * 2.5;
-                        t.color = redTrailColors[Math.floor(Math.random() * redTrailColors.length)];
-                        fireTrails.push(t);
-                    }
                     if (this.fuseTimer <= 0) {
                         // EXPLODE — bright flash effect
                         // White flash circle that fades
@@ -2279,20 +2257,6 @@
                 }
                 
                 ctx.save();
-                
-                // Red Minion charging visual — pulsing red ring + glow
-                if (this.isRedMinion && this.isCharging) {
-                    ctx.save();
-                    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 100);
-                    ctx.strokeStyle = `rgba(255,0,0,${0.4 + pulse * 0.5})`;
-                    ctx.lineWidth = 2;
-                    ctx.shadowColor = '#ff0000';
-                    ctx.shadowBlur = 8 + pulse * 6;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size + 4 + pulse * 4, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.restore();
-                }
                 
                 // Gold King shake when about to spawn minions
                 if (this.isGoldCrown && this.shakeTimer > 0) {
