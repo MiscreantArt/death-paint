@@ -2212,8 +2212,9 @@
                 // No knockback when frozen (crown freeze = completely stuck)
                 if (projectileAngle !== null && this.frozenTimer <= 0) {
                     let knockbackForce = this.isRedMinion ? 15 : 8;
-                    // Bosses barely budge — can't be pushed off screen
-                    if (this.isRedKing || this.isGoldCrown || this.isRobotGirl) knockbackForce = 2;
+                    // Red King: zero knockback (immovable). Gold King + Robot Girl: barely budge.
+                    if (this.isRedKing) knockbackForce = 0;
+                    else if (this.isGoldCrown || this.isRobotGirl) knockbackForce = 2;
                     this.knockbackX = Math.cos(projectileAngle) * knockbackForce;
                     this.knockbackY = Math.sin(projectileAngle) * knockbackForce;
                 }
@@ -4426,28 +4427,28 @@
             const barX = (canvas.width - barW) / 2;
             const barY = canvas.height * 0.5;
             
+            // Animated progress bar — smooth fill that shows activity
+            if (!window._loadBarProgress) window._loadBarProgress = 0;
+            const targetProgress = loadedAssets / totalAssets;
+            // Smooth towards target, but also creep forward slowly so it never looks frozen
+            const elapsed = window._loadScreenStart ? (Date.now() - window._loadScreenStart) / 1000 : 0;
+            const creep = Math.min(0.4, elapsed * 0.05); // slow creep up to 40%
+            const visualTarget = Math.max(targetProgress, creep);
+            window._loadBarProgress += (visualTarget - window._loadBarProgress) * 0.08;
+            
             ctx.fillStyle = 'rgba(0,0,0,0.1)';
             ctx.fillRect(barX, barY, barW, barH);
             
-            if (loadedAssets > 0) {
+            if (window._loadBarProgress > 0.01) {
                 ctx.fillStyle = '#4caf50';
-                ctx.fillRect(barX, barY, (barW * loadedAssets) / totalAssets, barH);
+                ctx.fillRect(barX, barY, barW * window._loadBarProgress, barH);
             }
             
             // Progress text
             ctx.font = '14px Arial, sans-serif';
             ctx.fillStyle = '#666';
-            const pct = Math.floor((loadedAssets / totalAssets) * 100);
+            const pct = Math.floor(window._loadBarProgress * 100);
             ctx.fillText(`Loading... ${pct}%`, canvas.width / 2, barY + 40);
-            
-            // Status details
-            ctx.font = '12px Arial';
-            ctx.fillStyle = '#999';
-            let statusY = barY + 70;
-            
-            ctx.fillText(musicReady ? '✓ Music' : '○ Music...', canvas.width / 2, statusY);
-            statusY += 20;
-            ctx.fillText(heroReady ? '✓ Sprites' : '○ Sprites...', canvas.width / 2, statusY);
             
             // Check if loading complete
             if (loadedAssets >= totalAssets) {
@@ -5030,14 +5031,15 @@
             pauseBtnRect = null;
             hangBtnGameRect = null;
             
-            // Halo icons — up to 2, shown in toolbar
+            // Halo icons — up to 2, shown in toolbar right of coverage bar
             if (haloCount > 0) {
                 const haloIcon = sprites.powerUps.halo;
                 if (haloIcon && haloIcon.complete && haloIcon.naturalWidth > 0) {
                     const iconSize = 90;
+                    const haloStartX = barX + barW + 6;
                     for (let hi = 0; hi < haloCount; hi++) {
-                        const iconX = hangX + hangW + 4 + hi * (iconSize * 0.55);
-                        const iconY = btnY2 + 2;
+                        const iconX = haloStartX + hi * (iconSize * 0.55);
+                        const iconY = barY - iconSize / 2 + barH / 2;
                         ctx.globalAlpha = hi === 0 ? 0.85 : 0.55;
                         try {
                             ctx.drawImage(haloIcon, iconX, iconY, iconSize, iconSize);
