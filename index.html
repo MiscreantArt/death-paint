@@ -4494,6 +4494,14 @@
             statusY += 20;
             ctx.fillText(heroReady ? '✓ Sprites' : '○ Sprites...', canvas.width / 2, statusY);
             
+            // Tap hint — audio needs a gesture to start on mobile
+            if (!musicReady && window._loadingStartTime && Date.now() - window._loadingStartTime > 3000) {
+                statusY += 30;
+                ctx.font = '13px Arial';
+                ctx.fillStyle = '#aaa';
+                ctx.fillText('tap screen to load audio', canvas.width / 2, statusY);
+            }
+            
             // Check if loading complete
             if (loadedAssets >= totalAssets) {
                 // Short delay before transitioning to menu
@@ -4502,6 +4510,15 @@
                 } else if (Date.now() - window.loadingCompleteTime > 500) {
                     gameState = 'menu';
                 }
+            }
+            // Failsafe: if stuck on loading for 8s+ and sprites are ready, skip music wait
+            if (!window._loadingStartTime) window._loadingStartTime = Date.now();
+            if (heroReady && !musicReady && Date.now() - window._loadingStartTime > 8000) {
+                gameState = 'menu';
+            }
+            // Extreme failsafe: 15s, go to menu no matter what
+            if (Date.now() - window._loadingStartTime > 15000) {
+                gameState = 'menu';
             }
         }
 
