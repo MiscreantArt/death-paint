@@ -5153,9 +5153,17 @@
                 
                 // Skip tutorial button
                 if (gameState === 'tutorial' && skipButtonRect && inBtn(skipButtonRect)) {
-                    playSound('menu-tap');
-                    prepareMusic();
-                    startGame();
+                    initAudio();
+                    const doSkipStart = () => {
+                        playSound('menu-tap');
+                        prepareMusic();
+                        startGame();
+                    };
+                    if (audioCtx && audioCtx.state !== 'running') {
+                        audioCtx.resume().then(doSkipStart).catch(() => doSkipStart());
+                    } else {
+                        doSkipStart();
+                    }
                     return;
                 }
                 if (inBtn(hangBtnGameRect)) {
@@ -5757,6 +5765,16 @@
             rainbowTimer = 0;
             gameState = 'playing';
             startMusic();
+            // Belt-and-suspenders retry for mobile Safari/tutorial-skip audio weirdness
+            setTimeout(() => {
+                if (gameState !== 'playing') return;
+                initAudio();
+                if (audioCtx && audioCtx.state !== 'running') {
+                    audioCtx.resume().catch(() => {});
+                }
+                if (!bgMusicBuffer) prepareMusic();
+                if (!bgMusic || !bgMusic.source) startMusic();
+            }, 120);
             score = 0;
             killCount = 0;
             
