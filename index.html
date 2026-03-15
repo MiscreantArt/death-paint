@@ -2119,13 +2119,19 @@
                     this.currentDirection = this.getCardinalDirection(dx, dy);
                     
                     // Drop permanent color pixels — builds up like Jackson Pollock (not for bosses, except Red King)
-                    // Reduced: 1 pixel every 4 frames to prevent canvas saturation
-                    if (!this.isBoss && Math.random() < 0.25 * frameDt * 60) {
-                        fireTrails.push(new FireTrail(
-                            this.x + (Math.random() - 0.5) * 30,
-                            this.y + (Math.random() - 0.5) * 20,
-                            this.favoriteColor
-                        ));
+                    if (!this.isBoss) {
+                        // Red minions leave a heavy red trail — visible charge streak
+                        const dropRate = this.isRedMinion ? 0.85 : 0.25;
+                        const spread = this.isRedMinion ? 15 : 30;
+                        if (Math.random() < dropRate * frameDt * 60) {
+                            const t = new FireTrail(
+                                this.x + (Math.random() - 0.5) * spread,
+                                this.y + (Math.random() - 0.5) * (spread * 0.6),
+                                this.favoriteColor
+                            );
+                            if (this.isRedMinion) t.size = 2 + Math.random() * 1.5;
+                            fireTrails.push(t);
+                        }
                     }
 
                     
