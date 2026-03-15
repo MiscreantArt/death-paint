@@ -1673,10 +1673,10 @@
                     this.minionSpawnTimer = 240; // 4 seconds at 60fps
                     this.shakeTimer = 0; // Shake before spawning minions
                 } else if (forceType === 'redMinion') {
-                    // Red Minion — fast charger that explodes
+                    // Red Minion — indestructible bomber, explodes after 4 seconds
                     this.spriteId = 2164;
                     this.favoriteColor = '#cc0000';
-                    this.health = 3;
+                    this.health = 9999; // indestructible
                     this.speed = 2.0 + Math.random() * 0.8;
                     this.tier = 2;
                     this.size = 38;
@@ -1684,8 +1684,7 @@
                     this.isDarkBoss = false;
                     this.isGreen = false;
                     this.isRedMinion = true;
-                    this.charging = false;
-                    this.chargeTimer = 0;
+                    this.fuseTimer = 180; // 3 seconds at 60fps
                     this.knockbackResist = 0.15; // low resist = bounces a lot
                 } else if (forceType === 'goldMinion1') {
                     // Gold Crown guard — chunkier bodyguard
@@ -2133,47 +2132,38 @@
 
                 }
                 
-                // Red Minion charging behavior — charges when close to player, explodes after short fuse
+                // Red Minion fuse countdown — explodes after 3 seconds regardless (not when frozen for death sequence)
                 if (this.isRedMinion && !this.frozen) {
-                    // Trigger charge when within 90px of player
-                    if (!this.charging) {
+                    this.fuseTimer -= frameDt * 60;
+                    if (this.fuseTimer <= 0) {
+                        // EXPLODE — bright flash effect
+                        particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,100,50,0.9)', 8, 2.5));
+                        particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,255,255,0.8)', 6, 2));
+                        // Red paint splat on canvas — behind and to sides of bomber
+                        const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444'];
+                        let dirOffset = 0;
+                        if (this.currentDirection === 'east') dirOffset = Math.PI;
+                        else if (this.currentDirection === 'west') dirOffset = 0;
+                        else if (this.currentDirection === 'south') dirOffset = -Math.PI/2;
+                        else if (this.currentDirection === 'north') dirOffset = Math.PI/2;
+                        for (let i = 0; i < 40; i++) {
+                            const spreadAngle = (Math.random() - 0.5) * Math.PI * 1.3;
+                            const angle = dirOffset + spreadAngle;
+                            const dist = Math.random() * 35;
+                            const t = new FireTrail(this.x + Math.cos(angle) * dist, this.y + Math.sin(angle) * dist);
+                            t.size = 1.5 + Math.random() * 2;
+                            t.color = redColors[Math.floor(Math.random() * redColors.length)];
+                            fireTrails.push(t);
+                        }
                         const distToPlayer = Math.hypot(this.x - player.x, this.y - player.y);
-                        if (distToPlayer < 90) {
-                            this.charging = true;
-                            this.chargeTimer = 45; // ~0.75 seconds to explode
+                        if (distToPlayer < 80) {
+                            player.health -= 1;
                         }
-                    }
-                    if (this.charging) {
-                        this.chargeTimer -= frameDt * 60;
-                        if (this.chargeTimer <= 0) {
-                            // EXPLODE — red paint splat behind and to sides
-                            const redColors = ['#cc0000', '#ff2222', '#990000', '#ff4444'];
-                            let dirOffset = 0;
-                            if (this.currentDirection === 'east') dirOffset = Math.PI;
-                            else if (this.currentDirection === 'west') dirOffset = 0;
-                            else if (this.currentDirection === 'south') dirOffset = -Math.PI/2;
-                            else if (this.currentDirection === 'north') dirOffset = Math.PI/2;
-                            for (let i = 0; i < 40; i++) {
-                                const spreadAngle = (Math.random() - 0.5) * Math.PI * 1.3;
-                                const angle = dirOffset + spreadAngle;
-                                const dist = Math.random() * 35;
-                                const t = new FireTrail(this.x + Math.cos(angle) * dist, this.y + Math.sin(angle) * dist);
-                                t.size = 1.5 + Math.random() * 2;
-                                t.color = redColors[Math.floor(Math.random() * redColors.length)];
-                                fireTrails.push(t);
-                            }
-                            particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,100,50,0.9)', 8, 2.5));
-                            particles.push(new Particle(this.x, this.y, 0, 0, 'rgba(255,255,255,0.8)', 6, 2));
-                            const distToPlayer = Math.hypot(this.x - player.x, this.y - player.y);
-                            if (distToPlayer < 80) {
-                                player.health -= 1;
-                            }
-                            screenShake = 5;
-                            playSound('red-minion-explode');
-                            this.health = 0;
-                            this.exploded = true;
-                            this._markedDead = true;
-                        }
+                        screenShake = 5;
+                        playSound('red-minion-explode');
+                        this.health = 0;
+                        this.exploded = true;
+                        this._markedDead = true;
                     }
                 }
                 
@@ -2207,7 +2197,7 @@
             
             takeDamage(damage, projectileAngle = null) {
                 // Red minions are indestructible — UNLESS crown freeze makes them vulnerable
-                if (true) { // All enemies take damage (red minions are killable now)
+                if (!this.isRedMinion || this.crownVulnerable) {
                     this.health -= damage;
                 }
                 playSound('enemy-hit');
@@ -2298,18 +2288,9 @@
                     ctx.shadowBlur = 8;
                 }
                 
-                // Hit flash effect
-                if (this.hitFlash > 0) {
+                // Hit flash effect (not for red minions — they're indestructible, no flash needed)
+                if (this.hitFlash > 0 && !this.isRedMinion) {
                     ctx.filter = 'brightness(3)';
-                }
-                
-                // Red Minion charging flash — pulsing red glow that gets faster near explosion
-                if (this.isRedMinion && this.charging) {
-                    const flashRate = this.chargeTimer < 15 ? 2 : 4;
-                    if (Math.floor(this.chargeTimer / flashRate) % 2 === 0) {
-                        ctx.shadowColor = 'rgba(255,0,0,0.9)';
-                        ctx.shadowBlur = 20;
-                    }
                 }
                 
                 // Draw sprite - add safety checks
@@ -2326,18 +2307,6 @@
                     ctx.beginPath();
                     ctx.arc(this.x, this.y, this.size * 0.8, 0, Math.PI * 2);
                     ctx.fill();
-                }
-                
-                // Red pulse ring for charging minions
-                if (this.isRedMinion && this.charging) {
-                    const pulse = Math.sin(this.chargeTimer * 0.3) * 0.3 + 0.4;
-                    ctx.globalAlpha = pulse;
-                    ctx.strokeStyle = '#ff0000';
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size + 8, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
                 }
                 
                 ctx.restore();
